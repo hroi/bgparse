@@ -34,7 +34,7 @@ pub enum CapabilityType {
     MultipleRoutes,
     ExtendedNextHopEncoding,
     GracefulRestart,
-    FourByteASN(AutNum),
+    FourByteASN(u32),
     DynamicCapability,
     MultiSession,
     AddPath(Afi, Safi, AddPathDirection),
@@ -61,12 +61,10 @@ impl<'a> Capability<'a> {
             4 => CapabilityType::MultipleRoutes,
             5 => CapabilityType::ExtendedNextHopEncoding,
             64 => CapabilityType::GracefulRestart,
-            65 => {
-                CapabilityType::FourByteASN(AutNum::from((self.inner[2] as u32) << 24 |
-                                                         (self.inner[3] as u32) << 16 |
-                                                         (self.inner[4] as u32) <<  8 |
-                                                         self.inner[5] as u32))
-            }
+            65 => CapabilityType::FourByteASN((self.inner[2] as u32) << 24
+                                              | (self.inner[3] as u32) << 16
+                                              | (self.inner[4] as u32) <<  8
+                                              | self.inner[5] as u32),
             67 => CapabilityType::DynamicCapability,
             68 => CapabilityType::MultiSession,
             69 => {

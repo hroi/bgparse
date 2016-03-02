@@ -26,8 +26,8 @@ impl<'a> Open<'a> {
         self.inner[0]
     }
 
-    pub fn aut_num(&self) -> AutNum {
-        AutNum::from((self.inner[1] as u32) << 8 | self.inner[2] as u32)
+    pub fn aut_num(&self) -> u32 {
+        (self.inner[1] as u32) << 8 | self.inner[2] as u32
     }
 
     pub fn hold_time(&self) -> u16 {
@@ -100,34 +100,90 @@ impl<'a> Iterator for OpenParams<'a> {
 mod tests {
     use super::*;
     use types::*;
-    //use message::*;
 
     #[test]
     fn parse_open() {
         let bytes = &[//0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                      //0xff, 0xff, 0xff, 0xff, 0x00, 0x41, 0x01,
-                      0x04, 0xfc, 0x00, 0x00, 0xb4,
-                      0x0a, 0x00, 0x00, 0x06, 0x24, 0x02, 0x06, 0x01, 0x04, 0x00, 0x01, 0x00,
-                      0x01, 0x02, 0x02, 0x80, 0x00, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x46,
-                      0x00, 0x02, 0x06, 0x45, 0x04, 0x00, 0x01, 0x01, 0x03, 0x02, 0x06, 0x41,
-                      0x04, 0x00, 0x00, 0xfc, 0x00];
+            //0xff, 0xff, 0xff, 0xff, 0x00, 0x41, 0x01,
+            0x04, 0xfc, 0x00, 0x00, 0xb4,
+            0x0a, 0x00, 0x00, 0x06, 0x24, 0x02, 0x06, 0x01, 0x04, 0x00, 0x01, 0x00,
+            0x01, 0x02, 0x02, 0x80, 0x00, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x46,
+            0x00, 0x02, 0x06, 0x45, 0x04, 0x00, 0x01, 0x01, 0x03, 0x02, 0x06, 0x41,
+            0x04, 0x00, 0x00, 0xfc, 0x00];
         let open = Open::new(bytes).unwrap();
         assert_eq!(open.version(), 4);
-        assert_eq!(open.aut_num(), AutNum::from(64512u32));
+        assert_eq!(open.aut_num(), 64512);
         assert_eq!(open.hold_time(), 180);
         assert_eq!(open.ident(), 167772166);
-        {
-            let params = open.params();
-            let mut count = 0;
-            for param in params {
-                match param {
-                    Ok(OpenParam::Capability(_cap)) => (),
-                    _ => panic!("expected a capability")
-                }
-                count += 1;
-            }
-            assert_eq!(count, 6);
-        }
-    }
 
+        let mut params = open.params();
+
+        let param1 = params.next().unwrap().unwrap();
+        match param1 {
+            OpenParam::Capability(cap) => {
+                match cap.capability_type() {
+                    CapabilityType::MultiProtocol(AFI_IPV4, SAFI_UNICAST) => (),
+                    _ => panic!("expected CapabilityType::MultiProtocol")
+                }
+            }
+            _ => panic!("expected OpenParam::Capability")
+        }
+
+        let param2 = params.next().unwrap().unwrap();
+        match param2 {
+            OpenParam::Capability(cap) => {
+                match cap.capability_type() {
+                    CapabilityType::Private(128) => (),
+                    _ => panic!("expected CapabilityType::RouteRefresh")
+                }
+            }
+            _ => panic!("expected OpenParam::Capability")
+        }
+
+        let param3 = params.next().unwrap().unwrap();
+        match param3 {
+            OpenParam::Capability(cap) => {
+                match cap.capability_type() {
+                    CapabilityType::RouteRefresh => (),
+                    _ => panic!("expected CapabilityType::RouteRefresh")
+                }
+            }
+            _ => panic!("expected OpenParam::Capability")
+        }
+
+        let param4 = params.next().unwrap().unwrap();
+        match param4 {
+            OpenParam::Capability(cap) => {
+                match cap.capability_type() {
+                    CapabilityType::EnhancedRouteRefresh => (),
+                    _ => panic!("expected CapabilityType::EnhancedRouteRefresh")
+                }
+            }
+            _ => panic!("expected OpenParam::Capability")
+        }
+
+        let param5 = params.next().unwrap().unwrap();
+        match param5 {
+            OpenParam::Capability(cap) => {
+                match cap.capability_type() {
+                    CapabilityType::AddPath => (),
+                    _ => panic!("expected CapabilityType::AddPath")
+                }
+            }
+            _ => panic!("expected OpenParam::Capability")
+        }
+
+        let param6 = params.next().unwrap().unwrap();
+        match param6 {
+            OpenParam::Capability(cap) => {
+                match cap.capability_type() {
+                    CapabilityType::FourByteASN => (),
+                    _ => panic!("expected CapabilityType::FourByteASN")
+                }
+            }
+            _ => panic!("expected OpenParam::Capability")
+        }
+
+        assert!(params.next().is_none());
+    }
 }

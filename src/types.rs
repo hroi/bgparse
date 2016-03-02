@@ -1,10 +1,8 @@
 pub use core::result;
-
 use core::fmt;
 
 pub const VALID_BGP_MARKER: [u8; 16] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
-
 
 #[derive(PartialEq, Debug)]
 pub struct Prefix<'a> {
@@ -25,7 +23,11 @@ impl fmt::Display for BgpError {
     }
 }
 
+#[derive(PartialEq)]
 pub struct Afi(u16);
+
+pub const AFI_IPV4: Afi = Afi(1);
+pub const AFI_IPV6: Afi = Afi(2);
 
 impl From<u16> for Afi {
     fn from(other: u16) -> Afi {
@@ -43,7 +45,10 @@ impl fmt::Debug for Afi {
     }
 }
 
+pub const SAFI_UNICAST: Safi = Safi(1);
+pub const SAFI_MULTICAST: Safi = Safi(2);
 
+#[derive(PartialEq)]
 pub struct Safi(u8);
 
 impl From<u8> for Safi {
@@ -62,29 +67,29 @@ impl fmt::Debug for Safi {
     }
 }
 
-#[derive(PartialEq)]
-pub struct AutNum(u32);
-
-impl From<u16> for AutNum {
-    fn from(other: u16) -> AutNum {
-        AutNum(other as u32)
-    }
-}
-
-impl From<u32> for AutNum {
-    fn from(other: u32) -> AutNum {
-        AutNum(other)
-    }
-}
-
-impl fmt::Display for AutNum {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "AS{}", self.0)
-    }
-}
-
-impl fmt::Debug for AutNum {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
-    }
-}
+//#[derive(PartialEq)]
+//pub struct AutNum(u32);
+//
+//impl From<u16> for AutNum {
+//    fn from(other: u16) -> AutNum {
+//        AutNum(other as u32)
+//    }
+//}
+//
+//impl From<u32> for AutNum {
+//    fn from(other: u32) -> AutNum {
+//        AutNum(other)
+//    }
+//}
+//
+//impl fmt::Display for AutNum {
+//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//        write!(f, "AS{}", self.0)
+//    }
+//}
+//
+//impl fmt::Debug for AutNum {
+//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//        write!(f, "{}", self)
+//    }
+//}

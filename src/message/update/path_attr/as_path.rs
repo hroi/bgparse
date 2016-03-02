@@ -25,6 +25,7 @@ impl<'a> AsPath<'a> {
     }
 }
 
+#[cfg_attr(feature="clippy", allow(enum_variant_names))]
 pub enum AsPathSegment<'a> {
     AsSequence(AsSequence<'a>),
     AsSet(AsSet<'a>),
