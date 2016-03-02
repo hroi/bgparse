@@ -1,0 +1,11 @@
+[package]
+name = "bgparse"
+version = "0.0.0"
+authors = ["Hroi Sigurdsson <hroi@asdf.dk>"]
+
+[dependencies]
+clippy = {version = "*", optional = true}
+
+[features]
+default=[]
+
