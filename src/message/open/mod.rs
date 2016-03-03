@@ -118,71 +118,26 @@ mod tests {
 
         let mut params = open.params();
 
-        let param1 = params.next().unwrap().unwrap();
-        match param1 {
-            OpenParam::Capability(cap) => {
-                match cap.capability_type() {
-                    CapabilityType::MultiProtocol(AFI_IPV4, SAFI_UNICAST) => (),
-                    _ => panic!("expected CapabilityType::MultiProtocol")
+        macro_rules! expect_capability {
+            ($a:expr, $p:pat) => {
+                match $a {
+                    OpenParam::Capability(cap) => {
+                        match cap.capability_type() {
+                            $p => (),
+                            x => panic!("expected {}, got CapabilityType::{:?}", stringify!($p:tt), x)
+                        }
+                    }
+                    _ => panic!("expected OpenParam::Capability")
                 }
             }
-            _ => panic!("expected OpenParam::Capability")
         }
 
-        let param2 = params.next().unwrap().unwrap();
-        match param2 {
-            OpenParam::Capability(cap) => {
-                match cap.capability_type() {
-                    CapabilityType::Private(128) => (),
-                    _ => panic!("expected CapabilityType::RouteRefresh")
-                }
-            }
-            _ => panic!("expected OpenParam::Capability")
-        }
-
-        let param3 = params.next().unwrap().unwrap();
-        match param3 {
-            OpenParam::Capability(cap) => {
-                match cap.capability_type() {
-                    CapabilityType::RouteRefresh => (),
-                    _ => panic!("expected CapabilityType::RouteRefresh")
-                }
-            }
-            _ => panic!("expected OpenParam::Capability")
-        }
-
-        let param4 = params.next().unwrap().unwrap();
-        match param4 {
-            OpenParam::Capability(cap) => {
-                match cap.capability_type() {
-                    CapabilityType::EnhancedRouteRefresh => (),
-                    _ => panic!("expected CapabilityType::EnhancedRouteRefresh")
-                }
-            }
-            _ => panic!("expected OpenParam::Capability")
-        }
-
-        let param5 = params.next().unwrap().unwrap();
-        match param5 {
-            OpenParam::Capability(cap) => {
-                match cap.capability_type() {
-                    CapabilityType::AddPath => (),
-                    _ => panic!("expected CapabilityType::AddPath")
-                }
-            }
-            _ => panic!("expected OpenParam::Capability")
-        }
-
-        let param6 = params.next().unwrap().unwrap();
-        match param6 {
-            OpenParam::Capability(cap) => {
-                match cap.capability_type() {
-                    CapabilityType::FourByteASN => (),
-                    _ => panic!("expected CapabilityType::FourByteASN")
-                }
-            }
-            _ => panic!("expected OpenParam::Capability")
-        }
+        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::MultiProtocol(AFI_IPV4, SAFI_UNICAST));
+        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::Private(128));
+        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::RouteRefresh);
+        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::EnhancedRouteRefresh);
+        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::AddPath);
+        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::FourByteASN);
 
         assert!(params.next().is_none());
     }
