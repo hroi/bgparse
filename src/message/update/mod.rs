@@ -41,20 +41,15 @@ impl<'a> Update<'a> {
     pub fn path_attrs(&self) -> PathAttrIter {
         let offset = 4 + self.withdrawn_routes_len();
         let slice = &self.inner[offset..][..self.total_path_attr_len()];
-        assert!(slice[0] == 0x40);
         PathAttrIter::new(slice)
     }
 
     pub fn nlri(&self, add_paths: bool) -> NlriIter {
         let offset = 4 + self.withdrawn_routes_len() + self.total_path_attr_len();
         let slice = &self.inner[offset..];
-
         NlriIter::new(slice, add_paths)
     }
 }
-
-
-
 
 #[cfg(test)]
 mod tests {

@@ -136,8 +136,8 @@ mod tests {
         expect_capability!(params.next().unwrap().unwrap(), CapabilityType::Private(128));
         expect_capability!(params.next().unwrap().unwrap(), CapabilityType::RouteRefresh);
         expect_capability!(params.next().unwrap().unwrap(), CapabilityType::EnhancedRouteRefresh);
-        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::AddPath);
-        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::FourByteASN);
+        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::AddPath(_afi, _safi, _direction));
+        expect_capability!(params.next().unwrap().unwrap(), CapabilityType::FourByteASN(_asn));
 
         assert!(params.next().is_none());
     }

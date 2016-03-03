@@ -15,16 +15,26 @@ pub enum PathAttrType<'a> {
     Origin(Origin),
     /// well-known mandatory attribute that is composed of a sequence of AS path segments.
     AsPath(AsPath<'a>),
-    /// defines the (unicast) IP address of the router that SHOULD be used as the next hop to the destinations listed in the Network Layer Reachability Information field
+    /// defines the (unicast) IP address of the router that SHOULD be used as the next hop to the
+    /// destinations listed in the Network Layer Reachability Information field
     NextHop(u32),
-    /// optional non-transitive attribute that is a four-octet unsigned integer.  The value of this attribute MAY be used by a BGP speaker's Decision Process to discriminate among multiple entry points to a neighboring autonomous system.
+    /// optional non-transitive attribute that is a four-octet unsigned integer.  The value of this
+    /// attribute MAY be used by a BGP speaker's Decision Process to discriminate among multiple
+    /// entry points to a neighboring autonomous system.
     MultiExitDiscriminator(u32),
-    ///  well-known attribute that is a four-octet unsigned integer.  A BGP speaker uses it to inform its other internal peers of the advertising speaker's degree of preference for an advertised route.
+    /// well-known attribute that is a four-octet unsigned integer.  A BGP speaker uses it to inform
+    /// its other internal peers of the advertising speaker's degree of preference for an advertised
+    /// route.
     LocalPref(u32),
     /// well-known discretionary attribute of length 0.
     AtomicAggregate,
-    /// optional transitive attribute of length 6. The attribute contains the last AS number that formed the aggregate route (encoded as 2 octets), followed by the IP address of the BGP speaker that formed the aggregate route (encoded as 4 octets).
+    /// optional transitive attribute of length 6. The attribute contains the last AS number that
+    /// formed the aggregate route (encoded as 2 octets), followed by the IP address of the BGP
+    /// speaker that formed the aggregate route (encoded as 4 octets).
     Aggregator,
+    /// optional transitive attribute of variable length.  The attribute consists of a set of four
+    /// octet values, each of which specify a community.
+    Communities,
     OriginatorId(u32),
     ClusterList(ClusterList<'a>),
     Unknown(u8),
@@ -78,6 +88,7 @@ impl<'a> PathAttr<'a> {
             },
             6 => PathAttrType::AtomicAggregate,
             7 => PathAttrType::Aggregator,
+            8 => PathAttrType::Communities,
             9 => {
                 let id =
                     (self.attr_value()[0] as u32) << 24
@@ -92,15 +103,6 @@ impl<'a> PathAttr<'a> {
             n => PathAttrType::Unknown(n),
         }
     }
-
-    //fn attr_len(&self) -> usize {
-    //    let is_extended = self.attr_flags() & FLAG_EXT_LEN > 0;
-    //    if is_extended {
-    //        (self.inner[2] as usize) << 8 | self.inner[3] as usize
-    //    } else {
-    //        self.inner[2] as usize
-    //    }
-    //}
 
     fn attr_value(&self) -> &[u8] {
         let is_extended = self.attr_flags() & FLAG_EXT_LEN > 0;
@@ -147,7 +149,6 @@ impl<'a> Iterator for PathAttrIter<'a> {
         let attr_flags = self.inner[0];
 
         let is_extended = attr_flags & FLAG_EXT_LEN > 0;
-        assert!(!is_extended);
 
         let attr_value_offset = if is_extended { 4 } else { 3 };
 
@@ -157,11 +158,7 @@ impl<'a> Iterator for PathAttrIter<'a> {
             self.inner[2] as usize
         };
 
-        assert!(attr_len <= 6, "len: {}", attr_len);
-
-
         if self.inner.len() < attr_value_offset + attr_len{
-            assert!(false, "{} < {} + {}",  self.inner.len(), attr_len, attr_value_offset );
             let err = BgpError::BadLength;
             self.error = Some(err);
             return Some(Err(err));
