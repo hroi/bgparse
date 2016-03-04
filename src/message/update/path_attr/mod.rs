@@ -34,7 +34,7 @@ pub enum PathAttrType<'a> {
     Aggregator,
     /// optional transitive attribute of variable length.  The attribute consists of a set of four
     /// octet values, each of which specify a community.
-    Communities,
+    Community,
     OriginatorId(u32),
     ClusterList(ClusterList<'a>),
     Unknown(u8),
@@ -88,7 +88,7 @@ impl<'a> PathAttr<'a> {
             },
             6 => PathAttrType::AtomicAggregate,
             7 => PathAttrType::Aggregator,
-            8 => PathAttrType::Communities,
+            8 => PathAttrType::Community,
             9 => {
                 let id =
                     (self.attr_value()[0] as u32) << 24
