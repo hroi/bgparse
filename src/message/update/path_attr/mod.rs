@@ -1,115 +1,91 @@
-pub mod as_path;
-pub mod cluster_list;
-pub mod origin;
-
 use types::*;
-pub use self::as_path::*;
-pub use self::cluster_list::*;
-pub use self::origin::*;
 
-const FLAG_EXT_LEN: u8 = 0b00010000;
+/// Defines whether the attribute is optional (if set to 1) or well-known (if set to 0)
+pub const FLAG_OPTIONAL:   u8 = 0b10000000;
+/// Defines whether an optional attribute is transitive (if set to 1) or non-transitive (if set to 0).
+/// For well-known attributes, the Transitive bit MUST be set to 1.
+pub const FLAG_TRANSITIVE: u8 = 0b01000000;
+/// Defines whether the information contained in the optional transitive attribute is partial (if
+/// set to 1) or complete (if set to 0).  For well-known attributes
+/// and for optional non-transitive attributes, the Partial bit
+/// MUST be set to 0.
+pub const FLAG_PARTIAL:    u8 = 0b00100000;
+/// Defines whether the Attribute Length is one octet (if set to 0) or two octets (if set to 1).
+pub const FLAG_EXT_LEN:    u8 = 0b00010000;
 
-#[derive(PartialEq, Debug)]
-pub enum PathAttrType<'a> {
-    /// well-known mandatory attribute that defines the origin of the path information.
-    Origin(Origin),
-    /// well-known mandatory attribute that is composed of a sequence of AS path segments.
+pub enum PathAttr<'a> {
+    Origin(Origin<'a>),
     AsPath(AsPath<'a>),
-    /// defines the (unicast) IP address of the router that SHOULD be used as the next hop to the
-    /// destinations listed in the Network Layer Reachability Information field
-    NextHop(u32),
-    /// optional non-transitive attribute that is a four-octet unsigned integer.  The value of this
-    /// attribute MAY be used by a BGP speaker's Decision Process to discriminate among multiple
-    /// entry points to a neighboring autonomous system.
-    MultiExitDiscriminator(u32),
-    /// well-known attribute that is a four-octet unsigned integer.  A BGP speaker uses it to inform
-    /// its other internal peers of the advertising speaker's degree of preference for an advertised
-    /// route.
-    LocalPref(u32),
-    /// well-known discretionary attribute of length 0.
-    AtomicAggregate,
-    /// optional transitive attribute of length 6. The attribute contains the last AS number that
-    /// formed the aggregate route (encoded as 2 octets), followed by the IP address of the BGP
-    /// speaker that formed the aggregate route (encoded as 4 octets).
-    Aggregator,
-    /// optional transitive attribute of variable length.  The attribute consists of a set of four
-    /// octet values, each of which specify a community.
-    Community,
-    OriginatorId(u32),
+    NextHop(NextHop<'a>),
+    MultiExitDisc(MultiExitDisc<'a>),
+    LocalPreference(LocalPreference<'a>),
+    AtomicAggregate(AtomicAggregate<'a>),
+    Aggregator(Aggregator<'a>),
+    Community(Community<'a>),
+    OriginatorId(OriginatorId<'a>),
     ClusterList(ClusterList<'a>),
-    Unknown(u8),
-}
-
-#[derive(Debug)]
-pub struct PathAttr<'a> {
-    pub inner: &'a [u8],
+    MpReachNlri(MpReachNlri<'a>),
+    MpUnreachNlri(MpUnreachNlri<'a>),
+    ExtendedCommunities(ExtendedCommunities<'a>),
+    As4Path(As4Path<'a>),
+    As4Aggregator(As4Aggregator<'a>),
+    PmsiTunnel(PmsiTunnel<'a>),
+    TunnelEncapAttr(TunnelEncapAttr<'a>),
+    TrafficEngineering(TrafficEngineering<'a>),
+    Ipv6AddrSpecificExtCommunity(Ipv6AddrSpecificExtCommunity<'a>),
+    Aigp(Aigp<'a>),
+    PeDistinguisherLabels(PeDistinguisherLabels<'a>),
+    BgpLs(BgpLs<'a>),
+    AttrSet(AttrSet<'a>),
+    Other(Other<'a>),
 }
 
 impl<'a> PathAttr<'a> {
 
-    pub fn attr_flags(&self) -> u8 {
-        self.inner[0]
-    }
+    #[cfg_attr(feature="clippy", allow(match_same_arms))]
+    pub fn from_bytes(bytes: &'a [u8]) -> Result<PathAttr<'a>> {
+        if bytes.len() < 3 { return Err(BgpError::BadLength);}
 
-    pub fn attr_type(&self) -> PathAttrType {
-        match self.inner[1] {
-            1 => {
-                match self.attr_value()[0] {
-                    0 => PathAttrType::Origin(Origin::Igp),
-                    1 => PathAttrType::Origin(Origin::Egp),
-                    2 => PathAttrType::Origin(Origin::Incomplete),
-                    _ => PathAttrType::Origin(Origin::Unknown),
-                }
-            },
-            2 => PathAttrType::AsPath(AsPath::new(self.attr_value())),
-            3 => {
-                let ip =
-                    (self.attr_value()[0] as u32) << 24
-                    | (self.attr_value()[1] as u32) << 16
-                    | (self.attr_value()[2] as u32) << 8
-                    | (self.attr_value()[3] as u32);
-                PathAttrType::NextHop(ip)
-            },
-            4 => {
-                let med =
-                    (self.attr_value()[0] as u32) << 24
-                    | (self.attr_value()[1] as u32) << 16
-                    | (self.attr_value()[2] as u32) << 8
-                    | (self.attr_value()[3] as u32);
-                PathAttrType::MultiExitDiscriminator(med)
-            },
-            5 => {
-                let lpref =
-                    (self.attr_value()[0] as u32) << 24
-                    | (self.attr_value()[1] as u32) << 16
-                    | (self.attr_value()[2] as u32) << 8
-                    | (self.attr_value()[3] as u32);
-                PathAttrType::LocalPref(lpref)
-            },
-            6 => PathAttrType::AtomicAggregate,
-            7 => PathAttrType::Aggregator,
-            8 => PathAttrType::Community,
-            9 => {
-                let id =
-                    (self.attr_value()[0] as u32) << 24
-                    | (self.attr_value()[1] as u32) << 16
-                    | (self.attr_value()[2] as u32) << 8
-                    | (self.attr_value()[3] as u32);
-                PathAttrType::OriginatorId(id)
-            },
-            10 => {
-                PathAttrType::ClusterList(ClusterList::new(self.attr_value()))
-            }
-            n => PathAttrType::Unknown(n),
-        }
-    }
+        let attr_flags = bytes[0];
+        let attr_type  = bytes[1];
+        let is_extended = attr_flags & FLAG_EXT_LEN > 0;
 
-    fn attr_value(&self) -> &[u8] {
-        let is_extended = self.attr_flags() & FLAG_EXT_LEN > 0;
-        if is_extended {
-            &self.inner[4..]
+        if is_extended && bytes.len() < 4 { return Err(BgpError::BadLength);}
+
+        let attr_len = if is_extended {
+            (bytes[2] as u16) << 8
+                | bytes[3] as u16
         } else {
-            &self.inner[3..]
+            bytes[2] as u16
+        };
+
+        match (attr_type, attr_len) {
+            ( 0, _) => Err(BgpError::Invalid),
+            ( 1, 1) => Ok(PathAttr::Origin(Origin{inner: bytes})),
+            ( 1, _) => Err(BgpError::Invalid),
+            ( 2, _) => Ok(PathAttr::AsPath(AsPath{inner: bytes})),
+            ( 3, _) => Ok(PathAttr::NextHop(NextHop{inner: bytes})),
+            ( 4, _) => Ok(PathAttr::MultiExitDisc(MultiExitDisc{inner: bytes})),
+            ( 5, _) => Ok(PathAttr::LocalPreference(LocalPreference{inner: bytes})),
+            ( 6, _) => Ok(PathAttr::AtomicAggregate(AtomicAggregate{inner: bytes})),
+            ( 7, _) => Ok(PathAttr::Aggregator(Aggregator{inner: bytes})),
+            ( 8, _) => Ok(PathAttr::Community(Community{inner: bytes})),
+            ( 9, _) => Ok(PathAttr::OriginatorId(OriginatorId{inner: bytes})),
+            (10, _) => Ok(PathAttr::ClusterList(ClusterList{inner: bytes})),
+            (14, _) => Ok(PathAttr::MpReachNlri(MpReachNlri{inner: bytes})),
+            (15, _) => Ok(PathAttr::MpUnreachNlri(MpUnreachNlri{inner: bytes})),
+            (16, _) => Ok(PathAttr::ExtendedCommunities(ExtendedCommunities{inner: bytes})),
+            (17, _) => Ok(PathAttr::As4Path(As4Path{inner: bytes})),
+            (18, _) => Ok(PathAttr::As4Aggregator(As4Aggregator{inner: bytes})),
+            (22, _) => Ok(PathAttr::PmsiTunnel(PmsiTunnel{inner: bytes})),
+            (23, _) => Ok(PathAttr::TunnelEncapAttr(TunnelEncapAttr{inner: bytes})),
+            (24, _) => Ok(PathAttr::TrafficEngineering(TrafficEngineering{inner: bytes})),
+            (25, _) => Ok(PathAttr::Ipv6AddrSpecificExtCommunity(Ipv6AddrSpecificExtCommunity{inner: bytes})),
+            (26, _) => Ok(PathAttr::Aigp(Aigp{inner: bytes})),
+            (27, _) => Ok(PathAttr::PeDistinguisherLabels(PeDistinguisherLabels{inner: bytes})),
+            (29, _) => Ok(PathAttr::BgpLs(BgpLs{inner: bytes})),
+            (128,_) => Ok(PathAttr::AttrSet(AttrSet{inner: bytes})),
+            _ => Ok(PathAttr::Other(Other{inner: bytes})),
         }
     }
 
@@ -136,6 +112,7 @@ impl<'a> Iterator for PathAttrIter<'a> {
         if self.error.is_some() {
             return None;
         }
+
         if self.inner.len() == 0 {
             return None;
         }
@@ -147,7 +124,6 @@ impl<'a> Iterator for PathAttrIter<'a> {
         }
 
         let attr_flags = self.inner[0];
-
         let is_extended = attr_flags & FLAG_EXT_LEN > 0;
 
         let attr_value_offset = if is_extended { 4 } else { 3 };
@@ -163,10 +139,288 @@ impl<'a> Iterator for PathAttrIter<'a> {
             self.error = Some(err);
             return Some(Err(err));
         }
+
         let next_offset = attr_value_offset + attr_len;
         let slice = &self.inner[..next_offset];
         self.inner = &self.inner[next_offset..];
-        Some(Ok(PathAttr{inner: slice}))
+
+        Some(PathAttr::from_bytes(slice))
     }
 }
 
+
+pub trait Attr {
+    fn flags(&self) -> u8;
+    fn code(&self) -> u8;
+    fn value(&self) -> &[u8];
+
+    fn is_optional(&self) ->   bool { self.flags() & FLAG_OPTIONAL > 0 }
+    fn is_partial(&self) ->    bool { self.flags() & FLAG_PARTIAL > 0 }
+    fn is_transitive(&self) -> bool { self.flags() & FLAG_TRANSITIVE > 0 }
+    fn is_ext_len(&self) ->    bool { self.flags() & FLAG_EXT_LEN > 0 }
+}
+
+
+macro_rules! define_path_attr {
+    ($name:ident, $doc:expr) => {
+        #[derive(Debug)]
+        #[doc=$doc]
+        pub struct $name<'a> {
+            inner: &'a [u8],
+        }
+
+        impl<'a> Attr for $name<'a> {
+            fn flags(&self) -> u8 {
+                self.inner[0]
+            }
+
+            fn code(&self) -> u8 {
+                self.inner[0]
+            }
+
+            fn value(&self) -> &[u8] {
+                if self.is_ext_len() {
+                    &self.inner[4..]
+                } else {
+                    &self.inner[3..]
+                }
+            }
+        }
+    }
+}
+
+define_path_attr!(Origin,
+                "The ORIGIN attribute is generated by the speaker that originates the associated routing information.
+                ORIGIN is a well-known mandatory attribute.");
+
+define_path_attr!(AsPath,
+                "This attribute identifies the autonomous systems through which routing information
+                carried in this UPDATE message has passed.
+
+                The components of this list can be AS_SETs or AS_SEQUENCEs.
+                AS_PATH is a well-known mandatory attribute.");
+
+define_path_attr!(NextHop,
+                "The NEXT_HOP is a well-known mandatory attribute that defines the IP
+                address of the router that SHOULD be used as the next hop to the
+                destinations listed in the UPDATE message.");
+
+define_path_attr!(MultiExitDisc,
+                "The MULTI_EXIT_DISC is an optional non-transitive attribute that is
+                intended to be used on external (inter-AS) links to discriminate
+                among multiple exit or entry points to the same neighboring AS.");
+
+define_path_attr!(LocalPreference,
+                 "LOCAL_PREF is a well-known attribute that SHALL be included in all
+                  UPDATE messages that a given BGP speaker sends to other internal
+                  peers.
+
+                  A BGP speaker SHALL calculate the degree of preference for
+                  each external route based on the locally-configured policy, and
+                  include the degree of preference when advertising a route to its
+                  internal peers.  The higher degree of preference MUST be preferred.");
+
+define_path_attr!(AtomicAggregate,
+                 "ATOMIC_AGGREGATE is a well-known discretionary
+                  attribute.
+
+                  When a BGP speaker aggregates several routes for the purpose of
+                  advertisement to a particular peer, the AS_PATH of the aggregated
+                  route normally includes an AS_SET formed from the set of ASes from
+                  which the aggregate was formed.  In many cases, the network
+                  administrator can determine if the aggregate can safely be advertised
+                  without the AS_SET, and without forming route loops.");
+
+define_path_attr!(Aggregator,
+                 "AGGREGATOR is an optional transitive attribute, which MAY be included
+                  in updates that are formed by aggregation (see Section 9.2.2.2).  A
+                  BGP speaker that performs route aggregation MAY add the AGGREGATOR
+                  attribute, which SHALL contain its own AS number and IP address.  The
+                  IP address SHOULD be the same as the BGP Identifier of the speaker.");
+
+define_path_attr!(Community,"BGP Community Attribute.");
+define_path_attr!(OriginatorId,"");
+define_path_attr!(ClusterList,"");
+define_path_attr!(MpReachNlri,"");
+define_path_attr!(MpUnreachNlri,"");
+define_path_attr!(ExtendedCommunities,"");
+define_path_attr!(As4Path,"");
+define_path_attr!(As4Aggregator,"");
+define_path_attr!(PmsiTunnel,"");
+define_path_attr!(TunnelEncapAttr,"");
+define_path_attr!(TrafficEngineering,"");
+define_path_attr!(Ipv6AddrSpecificExtCommunity,"");
+define_path_attr!(Aigp,"");
+define_path_attr!(PeDistinguisherLabels,"");
+define_path_attr!(BgpLs,"");
+define_path_attr!(AttrSet,"");
+define_path_attr!(Other,"");
+
+
+impl<'a> AsPath<'a> {
+    pub fn segments(&self, four_byte: bool) -> AsPathIter {
+        AsPathIter{
+            inner: self.value(),
+            error: None,
+            four_byte: four_byte,
+        }
+    }
+}
+
+#[cfg_attr(feature="clippy", allow(enum_variant_names))]
+pub enum AsPathSegment<'a> {
+    AsSequence(AsSequence<'a>),
+    AsSet(AsSet<'a>),
+}
+
+pub struct AsPathIter<'a> {
+    inner: &'a [u8],
+    error: Option<BgpError>,
+    four_byte: bool,
+}
+
+impl<'a> Iterator for AsPathIter<'a> {
+    type Item = Result<AsPathSegment<'a>>;
+
+    fn next(&mut self) -> Option<Result<AsPathSegment<'a>>> {
+        if self.error.is_some() {
+            return None;
+        }
+        if self.inner.len() == 0 {
+            return None;
+        }
+        let as_size = if self.four_byte { 4 } else { 2 };
+        let ret = match self.inner[0] {
+            1 => {
+                let len = self.inner[1] as usize;
+                let slice = &self.inner[2..][..(len*as_size)];
+                self.inner = &self.inner[2..][(len*as_size)..];
+                Ok(AsPathSegment::AsSet(AsSet{inner: slice, four_byte: self.four_byte}))
+            }
+            2 => {
+                let len = self.inner[1] as usize;
+                let slice = &self.inner[2..][..(len*as_size)];
+                self.inner = &self.inner[2..][(len*as_size)..];
+                Ok(AsPathSegment::AsSequence(AsSequence{inner: slice, four_byte: self.four_byte}))
+            }
+            _ => {
+                let err = BgpError::Invalid;
+                self.error = Some(err);
+                Err(err)
+            }
+        };
+        Some(ret)
+    }
+}
+
+macro_rules! impl_as_segment {
+    ($a:ident, $b:ident, $doc:expr) => {
+
+        #[derive(PartialEq, Debug)]
+        #[doc=$doc]
+        pub struct $a<'a> {
+            pub inner: &'a [u8],
+            four_byte: bool,
+        }
+
+        impl<'a> $a<'a> {
+
+            pub fn aut_nums(&self) -> $b {
+                $b{ inner: self.inner, error: None, four_byte: self.four_byte }
+            }
+        }
+
+        pub struct $b<'a> {
+            inner: &'a [u8],
+            error: Option<BgpError>,
+            four_byte: bool,
+        }
+
+        impl<'a> Iterator for $b<'a> {
+            type Item = Result<u32>;
+
+            fn next(&mut self) -> Option<Result<u32>> {
+                if self.error.is_some() { return None;}
+                if self.inner.len() == 0 { return None;}
+
+                let as_size = if self.four_byte { 4 } else { 2 };
+
+                if self.inner.len() < as_size {
+                    let err = BgpError::BadLength;
+                    self.error = Some(err);
+                    return Some(Err(err));
+                }
+
+                let asn = if self.four_byte {
+                    (self.inner[0] as u32) << 24
+                        | (self.inner[1] as u32) << 16
+                        | (self.inner[2] as u32) << 8
+                        | (self.inner[3] as u32)
+                } else {
+                    (self.inner[0] as u32) << 8
+                        | (self.inner[1] as u32)
+                };
+
+                self.inner = &self.inner[as_size..];
+                Some(Ok(asn))
+            }
+        }
+    }
+}
+
+impl_as_segment!(AsSet, AsSetIter, "AS_SET: unordered set of ASes a route in the UPDATE message has traversed");
+impl_as_segment!(AsSequence, AsSequenceIter, "AS_SEQUENCE: ordered set of ASes a route in the UPDATE message has traversed");
+
+
+pub enum OriginType {
+    /// Network Layer Reachability Information is interior to the originating AS
+    Igp,
+    /// Network Layer Reachability Information learned via the EGP protocol [RFC904]
+    Egp,
+    /// Network Layer Reachability Information learned by some other means
+    Incomplete,
+    Unknown,
+}
+
+impl<'a> Origin<'a> {
+    pub fn origin(&self) -> OriginType {
+        match self.value()[0] {
+            0 => OriginType::Igp,
+            1 => OriginType::Egp,
+            2 => OriginType::Incomplete,
+            _ => OriginType::Unknown,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_as_set() {
+        let four_byte_asn = false;
+        let bytes = &[0x40, 0x02, 0x0a, 0x02, 0x01, 0x00, 0x1e, 0x01, 0x02, 0x00, 0x0a, 0x00, 0x14];
+        let as_path = AsPath{inner: bytes};
+        let mut segments = as_path.segments(four_byte_asn);
+        match segments.next() {
+            Some(Ok(AsPathSegment::AsSequence(seq))) => {
+                let mut asns = seq.aut_nums();
+                assert_eq!(asns.next().unwrap().unwrap(), 30);
+                let next = asns.next();
+                assert!(next.is_none(), "expected None, got {:?}", next);
+            },
+            _ => panic!("expected AS_SEQUENCE")
+        }
+        match segments.next() {
+            Some(Ok(AsPathSegment::AsSet(set))) => {
+                let mut asns = set.aut_nums();
+                assert_eq!(asns.next().unwrap().unwrap(), 10);
+                assert_eq!(asns.next().unwrap().unwrap(), 20);
+                assert!(asns.next().is_none());
+            }
+            _ => panic!("expected AS_SET")
+        }
+        assert!(segments.next().is_none());
+    }
+}
