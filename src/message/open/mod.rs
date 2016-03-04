@@ -14,8 +14,9 @@ pub struct Open<'a> {
 }
 
 impl<'a> Open<'a> {
-    pub fn new(raw: &'a [u8]) -> Result<Open> {
-        if raw.len() < 10 {
+
+    pub fn from_bytes(raw: &'a [u8]) -> Result<Open> {
+        if raw.len() < 29 {
             Err(BgpError::BadLength)
         } else {
             Ok(Open {
@@ -24,25 +25,29 @@ impl<'a> Open<'a> {
         }
     }
 
+    pub fn value(&self) -> &'a [u8] {
+        &self.inner[19..]
+    }
+
     pub fn version(&self) -> u8 {
-        self.inner[0]
+        self.value()[0]
     }
 
     pub fn aut_num(&self) -> u32 {
-        (self.inner[1] as u32) << 8 | self.inner[2] as u32
+        (self.value()[1] as u32) << 8 | self.value()[2] as u32
     }
 
     pub fn hold_time(&self) -> u16 {
-        (self.inner[3] as u16) << 8 | self.inner[4] as u16
+        (self.value()[3] as u16) << 8 | self.value()[4] as u16
     }
 
     pub fn ident(&self) -> u32 {
-        (self.inner[5] as u32) << 24 | (self.inner[6] as u32) << 16 |
-        (self.inner[7] as u32) <<  8 | (self.inner[8] as u32)
+        (self.value()[5] as u32) << 24 | (self.value()[6] as u32) << 16 |
+        (self.value()[7] as u32) <<  8 | (self.value()[8] as u32)
     }
 
     pub fn params(&self) -> OptionalParams {
-        OptionalParams::new(&self.inner[10..])
+        OptionalParams::new(&self.value()[10..])
     }
 }
 
@@ -104,24 +109,25 @@ impl<'a> Iterator for OptionalParams<'a> {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use super::capability::*;
     use types::*;
-    //use message::open::AddPathDirection;
 
     #[test]
     #[cfg_attr(feature="clippy", allow(cyclomatic_complexity))]
     fn parse_open() {
-        let bytes = &[//0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-            //0xff, 0xff, 0xff, 0xff, 0x00, 0x41, 0x01,
+        let bytes = &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0x00, 0x41, 0x01,
             0x04, 0xfc, 0x00, 0x00, 0xb4,
             0x0a, 0x00, 0x00, 0x06, 0x24, 0x02, 0x06, 0x01, 0x04, 0x00, 0x01, 0x00,
             0x01, 0x02, 0x02, 0x80, 0x00, 0x02, 0x02, 0x02, 0x00, 0x02, 0x02, 0x46,
             0x00, 0x02, 0x06, 0x45, 0x04, 0x00, 0x01, 0x01, 0x03, 0x02, 0x06, 0x41,
             0x04, 0x00, 0x00, 0xfc, 0x00];
-        let open = Open::new(bytes).unwrap();
+        let open = Open::from_bytes(bytes).unwrap();
+
         assert_eq!(open.version(), 4);
         assert_eq!(open.aut_num(), 64512);
         assert_eq!(open.hold_time(), 180);
@@ -130,11 +136,11 @@ mod tests {
         let mut params = open.params();
 
         macro_rules! expect_capability {
-            ($a:expr, $p:pat) => {
+            ($a:expr, $p:pat, $b:block) => {
                 match $a {
-                    OptionalParam::Capability(cap) => {
+                    Some(Ok(OptionalParam::Capability(cap))) => {
                         match cap {
-                            $p => cap,
+                            $p => $b,
                             x => panic!("expected {}, got CapabilityType::{:?}", stringify!($p:tt), x)
                         }
                     }
@@ -143,27 +149,28 @@ mod tests {
             }
         }
 
-        if let Capability::MultiProtocol(mp) = expect_capability!(params.next().unwrap().unwrap(),
-                                                                  Capability::MultiProtocol) {
+        expect_capability!(params.next(), Capability::MultiProtocol(mp), {
             assert_eq!(mp.afi(),AFI_IPV4);
             assert_eq!(mp.safi(),SAFI_UNICAST);
-        }
-        if let Capability::Private(p) = expect_capability!(params.next().unwrap().unwrap(),
-                                                           Capability::Private) {
+        });
+
+        expect_capability!(params.next(), Capability::Private(p), {
             assert_eq!(p.code(), 128);
-        }
-        expect_capability!(params.next().unwrap().unwrap(), Capability::RouteRefresh);
-        expect_capability!(params.next().unwrap().unwrap(), Capability::EnhancedRouteRefresh);
-        if let Capability::AddPath(ap) = expect_capability!(params.next().unwrap().unwrap(),
-                                                            Capability::AddPath) {
+        });
+
+        expect_capability!(params.next(), Capability::RouteRefresh(_), {});
+
+        expect_capability!(params.next(), Capability::EnhancedRouteRefresh(_), {});
+
+        expect_capability!(params.next(), Capability::AddPath(ap), {
             assert_eq!(ap.afi(), AFI_IPV4);
             assert_eq!(ap.safi(), SAFI_UNICAST);
             assert_eq!(ap.direction(), ADDPATH_DIRECTION_BOTH);
-        }
-        if let Capability::FourByteASN(fba) = expect_capability!(params.next().unwrap().unwrap(),
-                                                                 Capability::FourByteASN) {
+        });
+
+        expect_capability!(params.next(), Capability::FourByteASN(fba), {
             assert_eq!(fba.aut_num(), 64512);
-        }
+        });
 
         assert!(params.next().is_none());
     }

@@ -21,17 +21,20 @@ impl<'a> Message<'a> {
             return Err(BgpError::BadLength);
         }
         let (marker, message) = raw.split_at(16);
+
         if marker != VALID_BGP_MARKER {
             return Err(BgpError::Invalid);
         }
-        let (length, msg_type) = message[..3].split_at(2);
-        let length = (length[0] as u16) << 8 | (length[1] as u16);
-        if length as usize != raw.len() {
+
+        let message_len  = (message[0] as usize) << 8 | (message[1] as usize);
+        let message_type = message[2];
+
+        if message_len != raw.len() {
             return Err(BgpError::BadLength);
         }
-        match msg_type[0] {
-            1 => Ok(Message::Open(try!(Open::new(&message[3..])))),
-            2 => Ok(Message::Update(try!(Update::new(&message[3..])))),
+        match message_type {
+            1 => Ok(Message::Open(try!(Open::from_bytes(raw)))),
+            2 => Ok(Message::Update(try!(Update::from_bytes(raw)))),
             3 => Ok(Message::Notification),
             4 => Ok(Message::KeepAlive),
             5 => Ok(Message::Refresh),

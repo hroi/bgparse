@@ -1,3 +1,9 @@
+//! An UPDATE message is used to advertise feasible routes that share
+//! common path attributes to a peer, or to withdraw multiple unfeasible
+//! routes from service (see 3.1).  An UPDATE message MAY simultaneously
+//! advertise a feasible route and withdraw multiple unfeasible routes
+//! from service.  The UPDATE message always includes the fixed-size BGP
+
 use types::*;
 
 pub mod path_attr;
@@ -14,8 +20,8 @@ pub struct Update<'a> {
 }
 
 impl<'a> Update<'a> {
-    pub fn new(raw: &'a [u8]) -> Result<Update> {
-        if raw.len() < 4 {
+    pub fn from_bytes(raw: &'a [u8]) -> Result<Update> {
+        if raw.len() < 19+4 {
             Err(BgpError::BadLength)
         } else {
             Ok(Update {
@@ -24,107 +30,132 @@ impl<'a> Update<'a> {
         }
     }
 
+    fn value(&self) -> &'a [u8] {
+        &self.inner[19..]
+    }
+
     fn withdrawn_routes_len(&self) -> usize {
-        (self.inner[0] as usize) << 8 | self.inner[1] as usize
+        (self.value()[0] as usize) << 8 | self.value()[1] as usize
     }
 
     fn total_path_attr_len(&self) -> usize {
         let offset = self.withdrawn_routes_len() + 2;
-        (self.inner[offset] as usize) << 8 | self.inner[offset+1] as usize
+        (self.value()[offset] as usize) << 8 | self.value()[offset+1] as usize
     }
 
     pub fn withdrawn_routes(&self) -> WithdrawnRoutes {
-        let slice = &self.inner[2..][..self.withdrawn_routes_len()];
+        let slice = &self.value()[2..][..self.withdrawn_routes_len()];
         WithdrawnRoutes::new(slice)
     }
 
     pub fn path_attrs(&self) -> PathAttrIter {
         let offset = 4 + self.withdrawn_routes_len();
-        let slice = &self.inner[offset..][..self.total_path_attr_len()];
+        let slice = &self.value()[offset..][..self.total_path_attr_len()];
         PathAttrIter::new(slice)
     }
 
-    pub fn nlri(&self, add_paths: bool) -> NlriIter {
+    pub fn nlris(&self, add_paths: bool) -> NlriIter {
         let offset = 4 + self.withdrawn_routes_len() + self.total_path_attr_len();
-        let slice = &self.inner[offset..];
+        let slice = &self.value()[offset..];
         NlriIter::new(slice, add_paths)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    //use types::*;
-    //use super::*;
-    //use super::path_attr::*;
-    //use super::nlri::*;
+    use types::*;
+    use super::*;
+    use super::path_attr::*;
+    use super::nlri::*;
 
-    // #[test]
-    // fn parse_update() {
-    //     let four_byte_asn = true;
-    //     let add_paths = true;
+    #[test]
+    #[cfg_attr(feature="clippy", allow(cyclomatic_complexity))]
+    fn parse_update() {
+        let four_byte_asn = true;
+        let add_paths = true;
 
-    //     let bytes = &[//0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    //                   //0xff, 0xff, 0xff, 0xff, 0x00, 0x59, 0x02,
-    //                   0x00, 0x00, 0x00, 0x30, 0x40,
-    //                   0x01, 0x01, 0x00, 0x40, 0x02, 0x06, 0x02, 0x01, 0x00, 0x00, 0xfb, 0xff,
-    //                   0x40, 0x03, 0x04, 0x0a, 0x00, 0x0e, 0x01, 0x80, 0x04, 0x04, 0x00, 0x00,
-    //                   0x00, 0x00, 0x40, 0x05, 0x04, 0x00, 0x00, 0x00, 0x64, 0x80, 0x0a, 0x04,
-    //                   0x0a, 0x00, 0x22, 0x04, 0x80, 0x09, 0x04, 0x0a, 0x00, 0x0f, 0x01, 0x00,
-    //                   0x00, 0x00, 0x01, 0x20, 0x05, 0x05, 0x05, 0x05, 0x00, 0x00, 0x00, 0x01,
-    //                   0x20, 0xc0, 0xa8, 0x01, 0x05];
-    //     let update = Update::new(bytes).unwrap();
-    //     //assert_eq!(update.withdrawn_routes_len(), 0);
-    //     //assert_eq!(update.total_path_attr_len(), 48);
-    //     // withdrawn
+        let bytes = &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                      0xff, 0xff, 0xff, 0xff, 0x00, 0x59, 0x02, 0x00, 0x00, 0x00, 0x30, 0x40,
+                      0x01, 0x01, 0x00, 0x40, 0x02, 0x06, 0x02, 0x01, 0x00, 0x00, 0xfb, 0xff,
+                      0x40, 0x03, 0x04, 0x0a, 0x00, 0x0e, 0x01, 0x80, 0x04, 0x04, 0x00, 0x00,
+                      0x00, 0x00, 0x40, 0x05, 0x04, 0x00, 0x00, 0x00, 0x64, 0x80, 0x0a, 0x04,
+                      0x0a, 0x00, 0x22, 0x04, 0x80, 0x09, 0x04, 0x0a, 0x00, 0x0f, 0x01, 0x00,
+                      0x00, 0x00, 0x01, 0x20, 0x05, 0x05, 0x05, 0x05, 0x00, 0x00, 0x00, 0x01,
+                      0x20, 0xc0, 0xa8, 0x01, 0x05];
+        let update = Update::from_bytes(bytes).unwrap();
 
-    //     let mut withdrawn = update.withdrawn_routes();
-    //     assert!(withdrawn.next().is_none());
+        // withdrawn
+        let mut withdrawn = update.withdrawn_routes();
+        assert!(withdrawn.next().is_none());
 
-    //     // attrs
-    //     let mut attrs = update.path_attrs();
+        // attrs
+        let mut attrs = update.path_attrs();
 
-    //     assert_eq!(attrs.next().unwrap().unwrap().attr_type(), PathAttrType::Origin(Origin::Igp));
-    //     match attrs.next().unwrap().unwrap().attr_type() {
-    //         PathAttrType::AsPath(path) => {
-    //             let mut segments = path.segments(four_byte_asn);
-    //             match segments.next() {
-    //                 Some(Ok(AsPathSegment::AsSequence(seq))) => {
-    //                     let mut asns = seq.aut_nums();
-    //                     assert_eq!(asns.next().unwrap().unwrap(), 64511);
-    //                     assert!(asns.next().is_none());
-    //                 },
-    //                 _ => panic!("expected an AS_SEQUENCE")
-    //             }
-    //             assert!(segments.next().is_none());
-    //         },
-    //         _ => panic!("expected an AS_PATH"),
-    //     }
-    //     assert_eq!(attrs.next().unwrap().unwrap().attr_type(), PathAttrType::NextHop(0x0a000e01));
-    //     assert_eq!(attrs.next().unwrap().unwrap().attr_type(), PathAttrType::MultiExitDiscriminator(0));
-    //     assert_eq!(attrs.next().unwrap().unwrap().attr_type(), PathAttrType::LocalPref(100));
-    //     match attrs.next().unwrap().unwrap().attr_type() {
-    //         PathAttrType::ClusterList(list) => {
-    //             let mut cluster_ids = list.ids();
-    //             match cluster_ids.next() {
-    //                 Some(Ok(id)) => assert_eq!(id, 0x0a002204),
-    //                 _ => panic!("expected id")
-    //             };
-    //             assert!(cluster_ids.next().is_none());
-    //         },
-    //         _ => panic!("expected CLUSTER_LIST"),
-    //     }
-    //     assert_eq!(attrs.next().unwrap().unwrap().attr_type(), PathAttrType::OriginatorId(0x0a000f01));
-    //     assert!(attrs.next().is_none());
+        macro_rules! expect_attr {
+            ($a:expr, $p:pat, $b:block) => {
+                if let Some(Ok(attr)) = $a {
+                    match attr {
+                        $p => $b,
+                        _ => panic!("expected PathAttr")
+                    }
+                } else {
+                    panic!("expected {}", stringify!($p))
+                }
+            }
+        }
 
-    //     // NLRIs
+        expect_attr!(attrs.next(), PathAttr::Origin(orig), {
+            assert_eq!(orig.origin(), OriginType::Igp);
+        });
 
-    //     let mut nlri = update.nlri(add_paths);
-    //     assert_eq!(nlri.next().unwrap().unwrap(),
-    //                Nlri{path_id: Some(1),
-    //                     prefix: Prefix{inner: &[0x20, 0x05, 0x05, 0x05, 0x05]}});
-    //     assert_eq!(nlri.next().unwrap().unwrap(),
-    //                Nlri{path_id: Some(1),
-    //                     prefix: Prefix{inner: &[0x20, 0xc0, 0xa8, 0x01, 0x05]}});
-    //     assert!(nlri.next().is_none());
-    // }
+        expect_attr!(attrs.next(), PathAttr::AsPath(path), {
+            let mut segments = path.segments(four_byte_asn);
+            match segments.next() {
+                Some(Ok(AsPathSegment::AsSequence(seq))) => {
+                    let mut asns = seq.aut_nums();
+                    assert_eq!(asns.next().unwrap().unwrap(), 64511);
+                    assert!(asns.next().is_none());
+                }
+                _ => panic!("expected AS_SEQUENCE")
+            }
+        });
+
+        expect_attr!(attrs.next(), PathAttr::NextHop(nh), {
+            assert_eq!(nh.ip(), 0x0a000e01);
+        });
+
+        expect_attr!(attrs.next(), PathAttr::MultiExitDisc(med), {
+            assert_eq!(med.med(), 0);
+        });
+
+        expect_attr!(attrs.next(), PathAttr::LocalPreference(pref), {
+            assert_eq!(pref.preference(), 100);
+        });
+
+        expect_attr!(attrs.next(), PathAttr::ClusterList(list), {
+            let mut cluster_ids = list.ids();
+            match cluster_ids.next() {
+                Some(Ok(id)) => assert_eq!(id, 0x0a002204),
+                _ => panic!("expected id")
+            };
+            assert!(cluster_ids.next().is_none());
+        });
+
+        expect_attr!(attrs.next(), PathAttr::OriginatorId(id), {
+            assert_eq!(id.ident(), 0x0a000f01);
+        });
+
+        assert!(attrs.next().is_none());
+
+        // NLRIs
+
+        let mut nlri = update.nlris(add_paths);
+        assert_eq!(nlri.next().unwrap().unwrap(),
+                   Nlri{path_id: Some(1),
+                        prefix: Prefix{inner: &[0x20, 0x05, 0x05, 0x05, 0x05]}});
+        assert_eq!(nlri.next().unwrap().unwrap(),
+                   Nlri{path_id: Some(1),
+                        prefix: Prefix{inner: &[0x20, 0xc0, 0xa8, 0x01, 0x05]}});
+        assert!(nlri.next().is_none());
+    }
 }
