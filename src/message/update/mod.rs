@@ -17,15 +17,19 @@ use self::nlri::*;
 
 pub struct Update<'a> {
     pub inner: &'a [u8],
+    four_byte_asn: bool,
+    add_paths: bool,
 }
 
 impl<'a> Update<'a> {
-    pub fn from_bytes(raw: &'a [u8]) -> Result<Update> {
+    pub fn from_bytes(raw: &'a [u8], four_byte_asn: bool, add_paths: bool) -> Result<Update> {
         if raw.len() < 19+4 {
             Err(BgpError::BadLength)
         } else {
             Ok(Update {
                 inner: raw,
+                four_byte_asn: four_byte_asn,
+                add_paths: add_paths,
             })
         }
     }
@@ -51,13 +55,13 @@ impl<'a> Update<'a> {
     pub fn path_attrs(&self) -> PathAttrIter {
         let offset = 4 + self.withdrawn_routes_len();
         let slice = &self.value()[offset..][..self.total_path_attr_len()];
-        PathAttrIter::new(slice)
+        PathAttrIter::new(slice, self.four_byte_asn)
     }
 
-    pub fn nlris(&self, add_paths: bool) -> NlriIter {
+    pub fn nlris(&self) -> NlriIter {
         let offset = 4 + self.withdrawn_routes_len() + self.total_path_attr_len();
         let slice = &self.value()[offset..];
-        NlriIter::new(slice, add_paths)
+        NlriIter::new(slice, self.add_paths)
     }
 }
 
@@ -66,6 +70,7 @@ impl<'a> fmt::Debug for Update<'a> {
         fmt.debug_struct("Update")
             .field("withdrawn_routes", &self.withdrawn_routes())
             .field("path_attrs", &self.path_attrs())
+            .field("nlris", &self.nlris())
             .finish()
     }
 }
@@ -104,7 +109,7 @@ mod tests {
                       0x0a, 0x00, 0x22, 0x04, 0x80, 0x09, 0x04, 0x0a, 0x00, 0x0f, 0x01, 0x00,
                       0x00, 0x00, 0x01, 0x20, 0x05, 0x05, 0x05, 0x05, 0x00, 0x00, 0x00, 0x01,
                       0x20, 0xc0, 0xa8, 0x01, 0x05];
-        let update = Update::from_bytes(bytes).unwrap();
+        let update = Update::from_bytes(bytes, four_byte_asn, add_paths).unwrap();
 
         // withdrawn
         let mut withdrawn = update.withdrawn_routes();
@@ -117,8 +122,8 @@ mod tests {
             assert_eq!(orig.origin(), OriginType::Igp);
         });
 
-        expect_attr!(attrs.next(), PathAttr::AsPath(path), {
-            let mut segments = path.segments(four_byte_asn);
+        expect_attr!(attrs.next(), PathAttr::As4Path(path), {
+            let mut segments = path.segments();
             match segments.next() {
                 Some(Ok(AsPathSegment::AsSequence(seq))) => {
                     let mut asns = seq.aut_nums().unwrap();
@@ -158,7 +163,7 @@ mod tests {
 
         // NLRIs
 
-        let mut nlri = update.nlris(add_paths);
+        let mut nlri = update.nlris();
         assert_eq!(nlri.next().unwrap().unwrap(),
                    Nlri{path_id: Some(1),
                         prefix: Prefix{inner: &[0x20, 0x05, 0x05, 0x05, 0x05]}});

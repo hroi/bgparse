@@ -68,7 +68,7 @@ impl<'a> Message<'a> {
     //     }
     // }
 
-    pub fn from_bytes(raw: &'a [u8]) -> Result<Message> {
+    pub fn from_bytes(raw: &'a [u8], four_byte_asn: bool, add_paths: bool) -> Result<Message> {
         if raw.len() < 19 || raw.len() > 4096 {
             return Err(BgpError::BadLength);
         }
@@ -86,7 +86,7 @@ impl<'a> Message<'a> {
         }
         match message_type {
             1 => Ok(Message::Open(try!(Open::from_bytes(raw)))),
-            2 => Ok(Message::Update(try!(Update::from_bytes(raw)))),
+            2 => Ok(Message::Update(try!(Update::from_bytes(raw, four_byte_asn, add_paths)))),
             3 => Ok(Message::Notification),
             4 => Ok(Message::KeepAlive),
             5 => Ok(Message::Refresh),

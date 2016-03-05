@@ -4,9 +4,26 @@ use core::fmt;
 pub const VALID_BGP_MARKER: [u8; 16] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 pub struct Prefix<'a> {
     pub inner: &'a [u8],
+}
+
+impl<'a> fmt::Debug for Prefix<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let masklen = self.inner[0];
+        let mut print_period = false;
+        for octet in &self.inner[1..] {
+            if print_period {
+                try!(fmt.write_str("."));
+            }
+            print_period = true;
+            try!(octet.fmt(fmt));
+        }
+        try!(fmt.write_str("/"));
+        masklen.fmt(fmt)
+        //let prefix_len = (mask_len+15) / 8; // length in bytes
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

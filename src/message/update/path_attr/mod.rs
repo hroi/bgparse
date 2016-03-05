@@ -45,7 +45,7 @@ pub enum PathAttr<'a> {
 impl<'a> PathAttr<'a> {
 
     #[cfg_attr(feature="clippy", allow(match_same_arms))]
-    pub fn from_bytes(bytes: &'a [u8]) -> Result<PathAttr<'a>> {
+    pub fn from_bytes(bytes: &'a [u8], four_byte_asn: bool) -> Result<PathAttr<'a>> {
         if bytes.len() < 3 { return Err(BgpError::BadLength);}
 
         let attr_flags = bytes[0];
@@ -65,7 +65,13 @@ impl<'a> PathAttr<'a> {
             ( 0, _) => Err(BgpError::Invalid),
             ( 1, 1) => Ok(PathAttr::Origin(Origin{inner: bytes})),
             ( 1, _) => Err(BgpError::Invalid),
-            ( 2, _) => Ok(PathAttr::AsPath(AsPath{inner: bytes})),
+            ( 2, _) => {
+                if four_byte_asn {
+                    Ok(PathAttr::As4Path(As4Path{inner: bytes}))
+                } else {
+                    Ok(PathAttr::AsPath(AsPath{inner: bytes}))
+                }
+            },
             ( 3, _) => Ok(PathAttr::NextHop(NextHop{inner: bytes})),
             ( 4, 4) => Ok(PathAttr::MultiExitDisc(MultiExitDisc{inner: bytes})),
             ( 4, _) => Err(BgpError::Invalid),
@@ -102,6 +108,7 @@ impl<'a> PathAttr<'a> {
 pub struct PathAttrIter<'a> {
     inner: &'a [u8],
     error: Option<BgpError>,
+    four_byte_asn: bool,
 }
 
 impl<'a> fmt::Debug for PathAttrIter<'a> {
@@ -116,10 +123,11 @@ impl<'a> fmt::Debug for PathAttrIter<'a> {
 
 impl<'a> PathAttrIter<'a> {
 
-    pub fn new(inner: &'a [u8]) -> PathAttrIter<'a> {
+    pub fn new(inner: &'a [u8], four_byte_asn: bool) -> PathAttrIter<'a> {
         PathAttrIter {
             inner: inner,
             error: None,
+            four_byte_asn: four_byte_asn,
         }
     }
 }
@@ -163,7 +171,7 @@ impl<'a> Iterator for PathAttrIter<'a> {
         let slice = &self.inner[..next_offset];
         self.inner = &self.inner[next_offset..];
 
-        Some(PathAttr::from_bytes(slice))
+        Some(PathAttr::from_bytes(slice, self.four_byte_asn))
     }
 }
 
@@ -252,18 +260,18 @@ define_path_attr!(AsPath,
 
 impl<'a> AsPath<'a> {
 
-    pub fn segments(&self, four_byte: bool) -> AsPathIter {
+    pub fn segments(&self) -> AsPathIter {
         AsPathIter{
             inner: self.value(),
             error: None,
-            four_byte: four_byte,
+            four_byte: false,
         }
     }
 }
 
 impl<'a> fmt::Debug for AsPath<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        self.segments(false).fmt(fmt)
+        self.segments().fmt(fmt)
     }
 }
 
@@ -660,18 +668,15 @@ define_path_attr!(Other, derive(Debug), doc="");
 
 
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn parse_as_set() {
-        let four_byte_asn = false;
         let bytes = &[0x40, 0x02, 0x0a, 0x02, 0x01, 0x00, 0x1e, 0x01, 0x02, 0x00, 0x0a, 0x00, 0x14];
         let as_path = AsPath{inner: bytes};
-        let mut segments = as_path.segments(four_byte_asn);
+        let mut segments = as_path.segments();
         match segments.next() {
             Some(Ok(AsPathSegment::AsSequence(seq))) => {
                 let mut asns = seq.aut_nums().unwrap();
