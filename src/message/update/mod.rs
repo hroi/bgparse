@@ -5,6 +5,7 @@
 //! from service.  The UPDATE message always includes the fixed-size BGP
 
 use types::*;
+use core::fmt;
 
 pub mod path_attr;
 pub mod withdrawn_routes;
@@ -14,7 +15,6 @@ use self::path_attr::*;
 use self::withdrawn_routes::*;
 use self::nlri::*;
 
-#[derive(Debug)]
 pub struct Update<'a> {
     pub inner: &'a [u8],
 }
@@ -61,6 +61,15 @@ impl<'a> Update<'a> {
     }
 }
 
+impl<'a> fmt::Debug for Update<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("Update")
+            .field("withdrawn_routes", &self.withdrawn_routes())
+            .field("path_attrs", &self.path_attrs())
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use types::*;
@@ -68,9 +77,22 @@ mod tests {
     use super::path_attr::*;
     use super::nlri::*;
 
+    macro_rules! expect_attr {
+        ($a:expr, $p:pat, $b:block) => {
+            if let Some(Ok(attr)) = $a {
+                match attr {
+                    $p => $b,
+                    _ => panic!("expected PathAttr")
+                }
+            } else {
+                panic!("expected {}", stringify!($p))
+            }
+        }
+    }
+
     #[test]
     #[cfg_attr(feature="clippy", allow(cyclomatic_complexity))]
-    fn parse_update() {
+    fn parse_update_1() {
         let four_byte_asn = true;
         let add_paths = true;
 
@@ -91,19 +113,6 @@ mod tests {
         // attrs
         let mut attrs = update.path_attrs();
 
-        macro_rules! expect_attr {
-            ($a:expr, $p:pat, $b:block) => {
-                if let Some(Ok(attr)) = $a {
-                    match attr {
-                        $p => $b,
-                        _ => panic!("expected PathAttr")
-                    }
-                } else {
-                    panic!("expected {}", stringify!($p))
-                }
-            }
-        }
-
         expect_attr!(attrs.next(), PathAttr::Origin(orig), {
             assert_eq!(orig.origin(), OriginType::Igp);
         });
@@ -112,8 +121,8 @@ mod tests {
             let mut segments = path.segments(four_byte_asn);
             match segments.next() {
                 Some(Ok(AsPathSegment::AsSequence(seq))) => {
-                    let mut asns = seq.aut_nums();
-                    assert_eq!(asns.next().unwrap().unwrap(), 64511);
+                    let mut asns = seq.aut_nums().unwrap();
+                    assert_eq!(asns.next().unwrap(), 64511);
                     assert!(asns.next().is_none());
                 }
                 _ => panic!("expected AS_SEQUENCE")

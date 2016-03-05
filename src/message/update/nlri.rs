@@ -6,6 +6,7 @@ pub struct Nlri<'a> {
     pub prefix: Prefix<'a>,
 }
 
+#[derive(Debug)]
 pub struct NlriIter<'a> {
     inner: &'a [u8],
     add_paths: bool,

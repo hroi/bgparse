@@ -116,6 +116,15 @@ mod tests {
     use super::capability::*;
     use types::*;
 
+    macro_rules! expect_capability {
+        ($a:expr, $p:pat, $blk:block) => {
+            match $a {
+                Some(Ok(OptionalParam::Capability($p))) => $blk,
+                x => panic!("expected Some(Ok(OptionalParam::Capability({}))), got {:?}", stringify!($p), x)
+            }
+        }
+    }
+
     #[test]
     #[cfg_attr(feature="clippy", allow(cyclomatic_complexity))]
     fn parse_open() {
@@ -134,20 +143,6 @@ mod tests {
         assert_eq!(open.ident(), 167772166);
 
         let mut params = open.params();
-
-        macro_rules! expect_capability {
-            ($a:expr, $p:pat, $b:block) => {
-                match $a {
-                    Some(Ok(OptionalParam::Capability(cap))) => {
-                        match cap {
-                            $p => $b,
-                            x => panic!("expected {}, got CapabilityType::{:?}", stringify!($p:tt), x)
-                        }
-                    }
-                    _ => panic!("expected OptionalParam::Capability")
-                }
-            }
-        }
 
         expect_capability!(params.next(), Capability::MultiProtocol(mp), {
             assert_eq!(mp.afi(),AFI_IPV4);
