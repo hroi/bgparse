@@ -22,6 +22,7 @@ pub struct Update<'a> {
 }
 
 impl<'a> Update<'a> {
+
     pub fn from_bytes(raw: &'a [u8], four_byte_asn: bool, add_paths: bool) -> Result<Update> {
         if raw.len() < 19+4 {
             Err(BgpError::BadLength)

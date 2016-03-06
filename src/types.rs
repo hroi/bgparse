@@ -22,7 +22,6 @@ impl<'a> fmt::Debug for Prefix<'a> {
         }
         try!(fmt.write_str("/"));
         masklen.fmt(fmt)
-        //let prefix_len = (mask_len+15) / 8; // length in bytes
     }
 }
 
@@ -83,30 +82,3 @@ impl fmt::Debug for Safi {
         }
     }
 }
-
-//#[derive(PartialEq)]
-//pub struct AutNum(u32);
-//
-//impl From<u16> for AutNum {
-//    fn from(other: u16) -> AutNum {
-//        AutNum(other as u32)
-//    }
-//}
-//
-//impl From<u32> for AutNum {
-//    fn from(other: u32) -> AutNum {
-//        AutNum(other)
-//    }
-//}
-//
-//impl fmt::Display for AutNum {
-//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//        write!(f, "AS{}", self.0)
-//    }
-//}
-//
-//impl fmt::Debug for AutNum {
-//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//        write!(f, "{}", self)
-//    }
-//}

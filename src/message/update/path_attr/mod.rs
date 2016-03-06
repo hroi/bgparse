@@ -113,11 +113,7 @@ pub struct PathAttrIter<'a> {
 
 impl<'a> fmt::Debug for PathAttrIter<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let mut debug_list = fmt.debug_list();
-        for attr in self.clone() {
-            debug_list.entry(&attr);
-        }
-        debug_list.finish()
+        fmt.debug_list().entries(self.clone()).finish()
     }
 }
 
@@ -338,46 +334,42 @@ impl<'a> Iterator for AsPathIter<'a> {
     }
 }
 
-macro_rules! impl_as_segment {
+macro_rules! impl_as_path_segment {
 
-    ($a:ident, $b:ident, $doc:expr) => {
+    ($coll:ident, $iter:ident, $doc:expr) => {
 
         #[derive(PartialEq,Debug,Clone)]
         #[doc=$doc]
-        pub struct $a<'a> {
+        pub struct $coll<'a> {
             inner: &'a [u8],
             four_byte: bool,
         }
 
-        impl<'a> $a<'a> {
+        impl<'a> $coll<'a> {
 
-            pub fn aut_nums(&self) -> Result<$b> {
+            pub fn aut_nums(&self) -> Result<$iter> {
                 let as_size = if self.four_byte { 4 } else { 2 };
                 if self.inner.len() % as_size > 0 {
                     return Err(BgpError::BadLength);
                 }
-                Ok($b{ inner: self.inner, error: None, four_byte: self.four_byte })
+                Ok($iter{ inner: self.inner, error: None, four_byte: self.four_byte })
             }
         }
 
         #[derive(Clone)]
-        pub struct $b<'a> {
+        pub struct $iter<'a> {
             inner: &'a [u8],
             error: Option<BgpError>,
             four_byte: bool,
         }
 
-        impl<'a> fmt::Debug for $b<'a> {
+        impl<'a> fmt::Debug for $iter<'a> {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                let mut debug_list = fmt.debug_list();
-                for entry in self.clone() {
-                    debug_list.entry(&entry);
-                }
-                debug_list.finish()
+                fmt.debug_list().entries(self.clone()).finish()
             }
         }
 
-        impl<'a> Iterator for $b<'a> {
+        impl<'a> Iterator for $iter<'a> {
             type Item = u32;
 
             fn next(&mut self) -> Option<u32> {
@@ -403,8 +395,10 @@ macro_rules! impl_as_segment {
     }
 }
 
-impl_as_segment!(AsSet, AsSetIter, "AS_SET: unordered set of ASes a route in the UPDATE message has traversed");
-impl_as_segment!(AsSequence, AsSequenceIter, "AS_SEQUENCE: ordered set of ASes a route in the UPDATE message has traversed");
+impl_as_path_segment!(AsSet, AsSetIter,
+                      "AS_SET: unordered set of ASes a route in the UPDATE message has traversed");
+impl_as_path_segment!(AsSequence, AsSequenceIter,
+                      "AS_SEQUENCE: ordered set of ASes a route in the UPDATE message has traversed");
 
 define_path_attr!(NextHop,
                   doc="The NEXT_HOP is a well-known mandatory attribute that defines the IP
@@ -484,7 +478,7 @@ define_path_attr!(AtomicAggregate, derive(Debug),
                    administrator can determine if the aggregate can safely be advertised
                    without the AS_SET, and without forming route loops.");
 
-define_path_attr!(Aggregator, derive(Debug),
+define_path_attr!(Aggregator,
                   doc="AGGREGATOR is an optional transitive attribute, which MAY be included
                   in updates that are formed by aggregation (see Section 9.2.2.2).  A
                   BGP speaker that performs route aggregation MAY add the AGGREGATOR
@@ -507,6 +501,14 @@ impl<'a> Aggregator<'a> {
             | (self.value()[3] as u32) << 16
             | (self.value()[4] as u32) << 8
             |  self.value()[5] as u32
+    }
+}
+
+impl<'a> fmt::Debug for Aggregator<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_fmt(format_args!("AS{}, {}.{}.{}.{}", self.aut_num(),
+                                   self.value()[2], self.value()[3],
+                                   self.value()[4], self.value()[5],))
     }
 }
 
@@ -564,11 +566,7 @@ impl<'a> Iterator for CommunityIter<'a> {
 
 impl<'a> fmt::Debug for CommunityIter<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let mut debug_list = fmt.debug_list();
-        for entry in self.clone() {
-            debug_list.entry(&entry);
-        }
-        debug_list.finish()
+        fmt.debug_list().entries(self.clone()).finish()
     }
 }
 

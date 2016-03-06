@@ -50,11 +50,7 @@ impl<'a> Iterator for WithdrawnRoutes<'a> {
 
 impl<'a> fmt::Debug for WithdrawnRoutes<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let mut debug_list = fmt.debug_list();
-        for attr in self.clone() {
-            debug_list.entry(&attr);
-        }
-        debug_list.finish()
+        fmt.debug_list().entries(self.clone()).finish()
     }
 }
 
