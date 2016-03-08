@@ -27,7 +27,7 @@ impl<'a> MpReachNlri<'a> {
 
     pub fn nexthop(&self) -> MpNextHop<'a> {
         MpNextHop {
-            inner: &self.value()[4..self.nexthop_len()],
+            inner: &self.value()[4..][..self.nexthop_len()],
             afi: self.afi(),
         }
     }
