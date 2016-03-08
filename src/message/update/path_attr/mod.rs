@@ -65,13 +65,8 @@ impl<'a> PathAttr<'a> {
             ( 0, _) => Err(BgpError::Invalid),
             ( 1, 1) => Ok(PathAttr::Origin(Origin{inner: bytes})),
             ( 1, _) => Err(BgpError::Invalid),
-            ( 2, _) => {
-                if four_byte_asn {
-                    Ok(PathAttr::As4Path(As4Path{inner: bytes}))
-                } else {
-                    Ok(PathAttr::AsPath(AsPath{inner: bytes}))
-                }
-            },
+            ( 2, _) if four_byte_asn => Ok(PathAttr::As4Path(As4Path{inner: bytes})),
+            ( 2, _) => Ok(PathAttr::AsPath(AsPath{inner: bytes})),
             ( 3, _) => Ok(PathAttr::NextHop(NextHop{inner: bytes})),
             ( 4, 4) => Ok(PathAttr::MultiExitDisc(MultiExitDisc{inner: bytes})),
             ( 4, _) => Err(BgpError::Invalid),
@@ -85,7 +80,7 @@ impl<'a> PathAttr<'a> {
             ( 9, 4) => Ok(PathAttr::OriginatorId(OriginatorId{inner: bytes})),
             ( 9, _) => Err(BgpError::Invalid),
             (10, _) => Ok(PathAttr::ClusterList(ClusterList{inner: bytes})),
-            (14, _) => Ok(PathAttr::MpReachNlri(MpReachNlri{inner: bytes})),
+            (14, _) => Ok(PathAttr::MpReachNlri(MpReachNlri::from_bytes(bytes))),
             (15, _) => Ok(PathAttr::MpUnreachNlri(MpUnreachNlri{inner: bytes})),
             (16, _) => Ok(PathAttr::ExtendedCommunities(ExtendedCommunities{inner: bytes})),
             (17, _) => Ok(PathAttr::As4Path(As4Path{inner: bytes})),
@@ -107,7 +102,7 @@ impl<'a> PathAttr<'a> {
 #[derive(Clone)]
 pub struct PathAttrIter<'a> {
     inner: &'a [u8],
-    error: Option<BgpError>,
+    error: bool,
     four_byte_asn: bool,
 }
 
@@ -122,7 +117,7 @@ impl<'a> PathAttrIter<'a> {
     pub fn new(inner: &'a [u8], four_byte_asn: bool) -> PathAttrIter<'a> {
         PathAttrIter {
             inner: inner,
-            error: None,
+            error: false,
             four_byte_asn: four_byte_asn,
         }
     }
@@ -132,18 +127,13 @@ impl<'a> Iterator for PathAttrIter<'a> {
     type Item = Result<PathAttr<'a>>;
 
     fn next(&mut self) -> Option<Result<PathAttr<'a>>> {
-        if self.error.is_some() {
-            return None;
-        }
-
-        if self.inner.len() == 0 {
+        if self.error || self.inner.is_empty() {
             return None;
         }
 
         if self.inner.len() < 2 {
-            let err = BgpError::BadLength;
-            self.error = Some(err);
-            return Some(Err(err));
+            self.error = true;
+            return Some(Err(BgpError::BadLength));
         }
 
         let attr_flags = self.inner[0];
@@ -158,9 +148,8 @@ impl<'a> Iterator for PathAttrIter<'a> {
         };
 
         if self.inner.len() < attr_value_offset + attr_len{
-            let err = BgpError::BadLength;
-            self.error = Some(err);
-            return Some(Err(err));
+            self.error = true;
+            return Some(Err(BgpError::BadLength));
         }
 
         let next_offset = attr_value_offset + attr_len;
@@ -172,11 +161,11 @@ impl<'a> Iterator for PathAttrIter<'a> {
 }
 
 
-pub trait Attr {
+pub trait Attr<'a> {
 
     fn flags(&self) -> u8;
     fn code(&self) -> u8;
-    fn value(&self) -> &[u8];
+    fn value(&self) -> &'a [u8];
 
     fn is_optional(&self) ->   bool { self.flags() & FLAG_OPTIONAL > 0 }
     fn is_partial(&self) ->    bool { self.flags() & FLAG_PARTIAL > 0 }
@@ -193,7 +182,7 @@ macro_rules! define_path_attr {
             inner: &'a [u8],
         }
 
-        impl<'a> Attr for $name<'a> {
+        impl<'a> Attr<'a> for $name<'a> {
             fn flags(&self) -> u8 {
                 self.inner[0]
             }
@@ -202,7 +191,7 @@ macro_rules! define_path_attr {
                 self.inner[0]
             }
 
-            fn value(&self) -> &[u8] {
+            fn value(&self) -> &'a [u8] {
                 if self.is_ext_len() {
                     &self.inner[4..]
                 } else {
@@ -259,7 +248,7 @@ impl<'a> AsPath<'a> {
     pub fn segments(&self) -> AsPathIter {
         AsPathIter{
             inner: self.value(),
-            error: None,
+            error: false,
             four_byte: false,
         }
     }
@@ -281,7 +270,7 @@ pub enum AsPathSegment<'a> {
 #[derive(Clone)]
 pub struct AsPathIter<'a> {
     inner: &'a [u8],
-    error: Option<BgpError>,
+    error: bool,
     four_byte: bool,
 }
 
@@ -303,12 +292,10 @@ impl<'a> Iterator for AsPathIter<'a> {
     type Item = Result<AsPathSegment<'a>>;
 
     fn next(&mut self) -> Option<Result<AsPathSegment<'a>>> {
-        if self.error.is_some() {
+        if self.error || self.inner.is_empty() {
             return None;
         }
-        if self.inner.len() == 0 {
-            return None;
-        }
+
         let as_size = if self.four_byte { 4 } else { 2 };
         let segment_type = self.inner[0];
         let ret = match segment_type {
@@ -325,9 +312,8 @@ impl<'a> Iterator for AsPathIter<'a> {
                 Ok(AsPathSegment::AsSequence(AsSequence{inner: slice, four_byte: self.four_byte}))
             }
             _ => {
-                let err = BgpError::Invalid;
-                self.error = Some(err);
-                Err(err)
+                self.error = true;
+                Err(BgpError::Invalid)
             }
         };
         Some(ret)
@@ -352,14 +338,14 @@ macro_rules! impl_as_path_segment {
                 if self.inner.len() % as_size > 0 {
                     return Err(BgpError::BadLength);
                 }
-                Ok($iter{ inner: self.inner, error: None, four_byte: self.four_byte })
+                Ok($iter{ inner: self.inner, error: false, four_byte: self.four_byte })
             }
         }
 
         #[derive(Clone)]
         pub struct $iter<'a> {
             inner: &'a [u8],
-            error: Option<BgpError>,
+            error: bool,
             four_byte: bool,
         }
 
@@ -373,8 +359,9 @@ macro_rules! impl_as_path_segment {
             type Item = u32;
 
             fn next(&mut self) -> Option<u32> {
-                if self.error.is_some() { return None;}
-                if self.inner.len() == 0 { return None;}
+                if self.error || self.inner.is_empty() {
+                    return None;
+                }
 
                 let as_size = if self.four_byte { 4 } else { 2 };
 
@@ -467,7 +454,7 @@ impl<'a> fmt::Debug for LocalPreference<'a> {
     }
 }
 
-define_path_attr!(AtomicAggregate, derive(Debug),
+define_path_attr!(AtomicAggregate,
                   doc="ATOMIC_AGGREGATE is a well-known discretionary
                    attribute.
 
@@ -477,6 +464,13 @@ define_path_attr!(AtomicAggregate, derive(Debug),
                    which the aggregate was formed.  In many cases, the network
                    administrator can determine if the aggregate can safely be advertised
                    without the AS_SET, and without forming route loops.");
+
+impl<'a> fmt::Debug for AtomicAggregate<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("AtomicAggregate").finish()
+    }
+}
+
 
 define_path_attr!(Aggregator,
                   doc="AGGREGATOR is an optional transitive attribute, which MAY be included
@@ -557,7 +551,7 @@ impl<'a> Iterator for CommunityIter<'a> {
     type Item = Community<'a>;
 
     fn next(&mut self) -> Option<Community<'a>> {
-        if self.inner.len() == 0 { return None;}
+        if self.inner.is_empty() { return None;}
         let community = Community{inner: &self.inner[..4]};
         self.inner = &self.inner[4..];
         Some(community)
@@ -587,31 +581,27 @@ impl<'a> ClusterList<'a> {
     pub fn ids(&self) -> ClusterListIter {
         ClusterListIter{
             inner: &self.value(),
-            error: None,
+            error: false,
         }
     }
 }
 
 pub struct ClusterListIter<'a> {
     inner: &'a [u8],
-    error: Option<BgpError>,
+    error: bool,
 }
 
 impl<'a> Iterator for ClusterListIter<'a> {
     type Item = Result<u32>;
 
     fn next(&mut self) -> Option<Result<u32>> {
-        if self.error.is_some() {
-            return None;
-        }
-        if self.inner.len() == 0 {
+        if self.error || self.inner.is_empty() {
             return None;
         }
 
         if self.inner.len() < 4 {
-            let err = BgpError::BadLength;
-            self.error = Some(err);
-            return Some(Err(err));
+            self.error = true;
+            return Some(Err(BgpError::BadLength));
         }
 
         let id = (self.inner[0]  as u32) << 24
@@ -625,8 +615,11 @@ impl<'a> Iterator for ClusterListIter<'a> {
     }
 }
 
-define_path_attr!(MpReachNlri, derive(Debug), doc="");
+mod mp_reach_nlri;
+pub use self::mp_reach_nlri::*;
+
 define_path_attr!(MpUnreachNlri, derive(Debug), doc="");
+
 define_path_attr!(ExtendedCommunities, derive(Debug), doc="");
 define_path_attr!(As4Path, doc="AsPath with four-byte-asns");
 
@@ -635,7 +628,7 @@ impl<'a> As4Path<'a> {
     pub fn segments(&self) -> AsPathIter {
         AsPathIter{
             inner: self.value(),
-            error: None,
+            error: false,
             four_byte: true,
         }
     }
@@ -644,13 +637,40 @@ impl<'a> As4Path<'a> {
 impl<'a> fmt::Debug for As4Path<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         self.segments().fmt(fmt)
-        // fmt.debug_struct("As4Path")
-        //     .field("segments", &self.segments())
-        //     .finish()
     }
 }
 
-define_path_attr!(As4Aggregator, derive(Debug), doc="");
+define_path_attr!(As4Aggregator, doc="Four-byte ASN version of AsPath");
+
+impl<'a> As4Aggregator<'a> {
+
+    /// The last AS number that formed the aggregate route
+    pub fn aut_num(&self) -> u32 {
+        (self.value()[0] as u32) << 24
+            | (self.value()[1] as u32) << 16
+            | (self.value()[2] as u32) << 8
+            | self.value()[3] as u32
+    }
+
+    /// The IP address of the BGP speaker that formed the aggregate route
+    /// (encoded as 4 octets).  This SHOULD be the same address as
+    /// the one used for the BGP Identifier of the speaker.
+    pub fn ident(&self) -> u32 {
+        (self.value()[4] as u32) << 24
+            | (self.value()[5] as u32) << 16
+            | (self.value()[6] as u32) << 8
+            | self.value()[7] as u32
+    }
+}
+
+impl<'a> fmt::Debug for As4Aggregator<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_fmt(format_args!("AS{}, {}.{}.{}.{}", self.aut_num(),
+                                   self.value()[2], self.value()[3],
+                                   self.value()[4], self.value()[5],))
+    }
+}
+
 define_path_attr!(PmsiTunnel, derive(Debug), doc="");
 define_path_attr!(TunnelEncapAttr, derive(Debug), doc="");
 define_path_attr!(TrafficEngineering, derive(Debug), doc="");
@@ -695,4 +715,5 @@ mod tests {
         }
         assert!(segments.next().is_none());
     }
+
 }
