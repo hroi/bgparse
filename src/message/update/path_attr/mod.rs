@@ -80,7 +80,7 @@ impl<'a> PathAttr<'a> {
             ( 9, 4) => Ok(PathAttr::OriginatorId(OriginatorId{inner: bytes})),
             ( 9, _) => Err(BgpError::Invalid),
             (10, _) => Ok(PathAttr::ClusterList(ClusterList{inner: bytes})),
-            (14, _) => Ok(PathAttr::MpReachNlri(MpReachNlri::from_bytes(bytes))),
+            (14, _) => Ok(PathAttr::MpReachNlri(try!(MpReachNlri::from_bytes(bytes)))),
             (15, _) => Ok(PathAttr::MpUnreachNlri(MpUnreachNlri{inner: bytes})),
             (16, _) => Ok(PathAttr::ExtendedCommunities(ExtendedCommunities{inner: bytes})),
             (17, _) => Ok(PathAttr::As4Path(As4Path{inner: bytes})),
@@ -564,7 +564,7 @@ impl<'a> fmt::Debug for CommunityIter<'a> {
     }
 }
 
-define_path_attr!(OriginatorId, derive(Debug), doc="");
+define_path_attr!(OriginatorId, derive(Debug), doc="BGP Route Reflection");
 
 impl<'a> OriginatorId<'a> {
     pub fn ident(&self) -> u32 {
@@ -575,7 +575,7 @@ impl<'a> OriginatorId<'a> {
     }
 }
 
-define_path_attr!(ClusterList, derive(Debug), doc="");
+define_path_attr!(ClusterList, derive(Debug), doc="BGP Route Reflection");
 
 impl<'a> ClusterList<'a> {
     pub fn ids(&self) -> ClusterListIter {
@@ -620,7 +620,7 @@ pub use self::mp_reach_nlri::*;
 
 define_path_attr!(MpUnreachNlri, derive(Debug), doc="");
 
-define_path_attr!(ExtendedCommunities, derive(Debug), doc="");
+define_path_attr!(ExtendedCommunities, derive(Debug), doc="Extended Communities Attribute");
 define_path_attr!(As4Path, doc="AsPath with four-byte-asns");
 
 impl<'a> As4Path<'a> {
@@ -640,7 +640,7 @@ impl<'a> fmt::Debug for As4Path<'a> {
     }
 }
 
-define_path_attr!(As4Aggregator, doc="Four-byte ASN version of AsPath");
+define_path_attr!(As4Aggregator, doc="Four-byte ASN version of Aggregator");
 
 impl<'a> As4Aggregator<'a> {
 
@@ -675,9 +675,9 @@ define_path_attr!(PmsiTunnel, derive(Debug), doc="");
 define_path_attr!(TunnelEncapAttr, derive(Debug), doc="");
 define_path_attr!(TrafficEngineering, derive(Debug), doc="");
 define_path_attr!(Ipv6AddrSpecificExtCommunity, derive(Debug), doc="");
-define_path_attr!(Aigp, derive(Debug), doc="");
+define_path_attr!(Aigp, derive(Debug), doc="The Accumulated IGP Metric Attribute");
 define_path_attr!(PeDistinguisherLabels, derive(Debug), doc="");
-define_path_attr!(BgpLs, derive(Debug), doc="");
+define_path_attr!(BgpLs, derive(Debug), doc="North-Bound Distribution of Link-State and TE Information");
 define_path_attr!(AttrSet, derive(Debug), doc="");
 define_path_attr!(Other, derive(Debug), doc="");
 

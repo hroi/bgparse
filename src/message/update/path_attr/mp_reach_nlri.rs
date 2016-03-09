@@ -3,108 +3,105 @@ use super::*;
 use types::*;
 use core::fmt;
 
-define_path_attr!(MpReachNlri, doc="Multi Protocol Network Layer Reachability Information");
+//define_path_attr!(MpReachNlri, doc="Multi Protocol Network Layer Reachability Information");
+
+#[derive(Debug)]
+pub enum MpReachNlri<'a> {
+    Ipv4Unicast(Ipv4ReachNlri<'a>),
+    Ipv4Multicast(Ipv4ReachNlri<'a>),
+    Ipv6Unicast(Ipv6ReachNlri<'a>),
+    Ipv6Multicast(Ipv6ReachNlri<'a>),
+    Other(OtherReachNlri<'a>),
+}
 
 impl<'a> MpReachNlri<'a> {
 
-    pub fn from_bytes(bytes: &'a [u8]) -> MpReachNlri {
-        MpReachNlri {
-            inner: bytes,
+    pub fn from_bytes(bytes: &'a [u8]) -> Result<MpReachNlri<'a>> {
+        if bytes.len() < 4 {
+            return Err(BgpError::BadLength);
         }
-    }
 
-    fn afi(&self) -> Afi {
-        Afi::from((self.value()[0] as u16) << 8 | self.value()[1] as u16)
-    }
+        let flags = bytes[0];
+        let value = if flags & FLAG_EXT_LEN > 0 { &bytes[4..] } else { &bytes[3..]};
 
-    fn safi(&self) -> Safi {
-        Safi::from(self.value()[2])
-    }
-
-    fn nexthop_len(&self) -> usize {
-        self.value()[3] as usize
-    }
-
-    pub fn nexthop(&self) -> MpNextHop<'a> {
-        MpNextHop {
-            inner: &self.value()[4..][..self.nexthop_len()],
-            afi: self.afi(),
-        }
-    }
-
-    pub fn nlris(&self) -> MpNlriIter<'a> {
-        let offset = 2 + 1 + 1 + self.nexthop_len() + 1;
-        match (self.afi(), self.safi()) {
-            (AFI_IPV4, SAFI_UNICAST) =>
-                MpNlriIter::Ipv4Unicast(Ipv4UnicastNlriIter{inner: &self.value()[offset..], error: false}),
-            (AFI_IPV4, SAFI_MULTICAST) =>
-                MpNlriIter::Ipv4Multicast(Ipv4MulticastNlriIter{inner: &self.value()[offset..], error: false}),
-            (AFI_IPV6, SAFI_UNICAST) =>
-                MpNlriIter::Ipv6Unicast(Ipv6UnicastNlriIter{inner: &self.value()[offset..], error: false}),
-            (AFI_IPV6, SAFI_MULTICAST) =>
-                MpNlriIter::Ipv6Multicast(Ipv6MulticastNlriIter{inner: &self.value()[offset..], error: false}),
-            _ => MpNlriIter::Other(OtherNlriIter{inner: &self.value()[offset..], error: false}),
-        }
+        let afi = Afi::from((value[0] as u16) << 8 | value[1] as u16);
+        let safi = Safi::from(value[2]);
+        let reach = match (afi, safi) {
+            (AFI_IPV4, SAFI_UNICAST) => MpReachNlri::Ipv4Unicast(Ipv4ReachNlri{inner: value}),
+            (AFI_IPV4, SAFI_MULTICAST) => MpReachNlri::Ipv4Multicast(Ipv4ReachNlri{inner: value}),
+            (AFI_IPV6, SAFI_UNICAST) => MpReachNlri::Ipv6Unicast(Ipv6ReachNlri{inner: value}),
+            (AFI_IPV6, SAFI_MULTICAST) => MpReachNlri::Ipv6Multicast(Ipv6ReachNlri{inner: value}),
+            _ => MpReachNlri::Other(OtherReachNlri{inner: value}),
+        };
+        Ok(reach)
     }
 }
 
-impl<'a> fmt::Debug for MpReachNlri<'a> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("MpReachNlri")
-            .field("nexthop", &self.nexthop())
-            .field("nlris", &self.nlris())
-            // .field("inner", &self.inner)
-            .finish()
-    }
-}
+macro_rules! impl_reach_ip_nlri {
+    ($reach_nlri:ident, $nlri:ident, $nlri_iter:ident, $nexthop: ident, $prefix:ident) => {
 
-#[derive(Debug)]
-pub enum MpNlriIter<'a> {
-    Ipv4Unicast(Ipv4UnicastNlriIter<'a>),
-    Ipv6Unicast(Ipv6UnicastNlriIter<'a>),
-    Ipv4Multicast(Ipv4MulticastNlriIter<'a>),
-    Ipv6Multicast(Ipv6MulticastNlriIter<'a>),
-    Other(OtherNlriIter<'a>)
-}
-
-
-#[derive(Debug)]
-pub struct MpNextHop<'a> {
-    inner: &'a [u8],
-    afi: Afi,
-}
-
-
-macro_rules! impl_mp_nlri {
-    ($item:ident, $iter:ident) => {
-
-        #[derive(Clone)]
-        pub struct $item<'a> {
+        pub struct $reach_nlri<'a> {
             inner: &'a [u8],
         }
 
-        impl<'a> fmt::Debug for $item<'a> {
+        pub struct $nlri<'a> {
+            inner: &'a [u8],
+        }
+
+        impl<'a> $nlri<'a> {
+            pub fn prefix(&self) -> $prefix<'a> {
+                $prefix{inner: self.inner}
+            }
+        }
+
+        impl<'a> fmt::Debug for $nlri<'a> {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
                 self.prefix().fmt(fmt)
             }
         }
 
-        impl<'a> $item<'a> {
-            pub fn prefix(&self) -> Prefix<'a> {
-                Prefix{inner: self.inner}
-            }
-        }
-
         #[derive(Clone)]
-        pub struct $iter<'a> {
+        pub struct $nlri_iter<'a> {
             inner: &'a [u8],
             error: bool,
         }
 
-        impl<'a> Iterator for $iter<'a> {
-            type Item = Result<$item<'a>>;
+        pub struct $nexthop<'a> {
+            inner: &'a [u8],
+        }
 
-            fn next(&mut self) -> Option<Result<$item<'a>>> {
+        impl<'a> $reach_nlri<'a> {
+
+            fn nexthop_len(&self) -> usize {
+                self.inner[3] as usize
+            }
+
+            pub fn nexthop(&self) -> $nexthop<'a> {
+                $nexthop {
+                    inner: &self.inner[4..][..self.nexthop_len()],
+                }
+            }
+
+            pub fn nlris(&self) -> $nlri_iter<'a> {
+                let offset = 2 + 1 + 1 + self.nexthop_len() + 1;
+                $nlri_iter{inner: &self.inner[offset..], error: false}
+            }
+        }
+
+        impl<'a> fmt::Debug for $reach_nlri<'a> {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                fmt.debug_struct(stringify!($reach_nlri))
+                    .field("nexthop", &self.nexthop())
+                    .field("nlris", &self.nlris())
+                // .field("inner", &self.inner)
+                    .finish()
+            }
+        }
+
+        impl<'a> Iterator for $nlri_iter<'a> {
+            type Item = Result<$nlri<'a>>;
+
+            fn next(&mut self) -> Option<Result<$nlri<'a>>> {
                 if self.error || self.inner.is_empty() {
                     return None;
                 }
@@ -117,13 +114,13 @@ macro_rules! impl_mp_nlri {
                     return Some(Err(BgpError::BadLength));
                 }
                 let slice = &self.inner[..byte_len];
-                let nlri = $item{inner: slice};
+                let nlri = $nlri{inner: slice};
                 self.inner = &self.inner[byte_len..];
                 Some(Ok(nlri))
             }
         }
 
-        impl<'a> fmt::Debug for $iter<'a> {
+        impl<'a> fmt::Debug for $nlri_iter<'a> {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
                 fmt.debug_list().entries(self.clone()).finish()
             }
@@ -132,11 +129,39 @@ macro_rules! impl_mp_nlri {
     }
 }
 
-impl_mp_nlri!(Ipv4UnicastNlri, Ipv4UnicastNlriIter);
-impl_mp_nlri!(Ipv6UnicastNlri, Ipv6UnicastNlriIter);
-impl_mp_nlri!(Ipv4MulticastNlri, Ipv4MulticastNlriIter);
-impl_mp_nlri!(Ipv6MulticastNlri, Ipv6MulticastNlriIter);
-impl_mp_nlri!(OtherNlri, OtherNlriIter);
+impl_reach_ip_nlri!(Ipv4ReachNlri, Ipv4Nlri, Ipv4NlriIter, Ipv4Nexthop, Ipv4Prefix);
+
+impl<'a> fmt::Debug for Ipv4Nexthop<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_fmt(format_args!("{}.{}.{}.{}",
+                                   self.inner[0], self.inner[1], self.inner[2], self.inner[3]))
+    }
+}
+
+impl_reach_ip_nlri!(Ipv6ReachNlri, Ipv6Nlri, Ipv6NlriIter, Ipv6Nexthop, Ipv6Prefix);
+
+impl<'a> fmt::Debug for Ipv6Nexthop<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        assert_eq!(self.inner.len(), 32);
+        let (global, link_local) = self.inner.split_at(16);
+        fmt.write_fmt(format_args!("{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}/{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
+                                   global[0], global[1], global[2], global[3],
+                                   global[4], global[5], global[6], global[7],
+                                   global[8], global[9], global[10], global[11],
+                                   global[12], global[13], global[14], global[15],
+
+                                   link_local[0], link_local[1], link_local[2], link_local[3],
+                                   link_local[4], link_local[5], link_local[6], link_local[7],
+                                   link_local[8], link_local[9], link_local[10], link_local[11],
+                                   link_local[12], link_local[13], link_local[14], link_local[15],
+        ))
+    }
+}
+
+#[derive(Debug)]
+pub struct OtherReachNlri<'a> {
+    inner: &'a [u8]
+}
 
 
 #[cfg(test)]
@@ -170,9 +195,9 @@ mod test {
                       19,    // prefixlength 2
                       212, 77, 0 // prefix 2
         ];
-        let mut iter = Ipv4MulticastNlriIter{inner: bytes, error: false};
-        assert_eq!(iter.next().unwrap().unwrap().prefix(), Prefix{inner: &[22, 193, 43, 128]});
-        assert_eq!(iter.next().unwrap().unwrap().prefix(), Prefix{inner: &[19, 212, 77, 0]});
+        let mut iter = Ipv4NlriIter{inner: bytes, error: false};
+        assert_eq!(iter.next().unwrap().unwrap().prefix(), Ipv4Prefix{inner: &[22, 193, 43, 128]});
+        assert_eq!(iter.next().unwrap().unwrap().prefix(), Ipv4Prefix{inner: &[19, 212, 77, 0]});
         assert!(iter.next().is_none());
     }
 }

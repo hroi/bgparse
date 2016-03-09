@@ -20,9 +20,9 @@ impl<'a> WithdrawnRoutes<'a> {
 }
 
 impl<'a> Iterator for WithdrawnRoutes<'a> {
-    type Item = Result<Prefix<'a>>;
+    type Item = Result<Ipv4Prefix<'a>>;
 
-    fn next(&mut self) -> Option<Result<Prefix<'a>>> {
+    fn next(&mut self) -> Option<Result<Ipv4Prefix<'a>>> {
         if self.error.is_some() {
             return None;
         }
@@ -44,7 +44,7 @@ impl<'a> Iterator for WithdrawnRoutes<'a> {
         }
         let prefix = &self.inner[..prefix_len];
         self.inner = &self.inner[prefix_len..];
-        Some(Ok(Prefix{inner: prefix}))
+        Some(Ok(Ipv4Prefix{inner: prefix}))
     }
 }
 

@@ -4,7 +4,7 @@ use core::fmt;
 #[derive(PartialEq)]
 pub struct Nlri<'a> {
     pub path_id: Option<u32>,
-    pub prefix: Prefix<'a>,
+    pub prefix: Ipv4Prefix<'a>,
 }
 
 impl<'a> fmt::Debug for Nlri<'a> {
@@ -64,7 +64,7 @@ impl<'a> Iterator for NlriIter<'a> {
             return Some(Err(err));
         }
         let slice = &self.inner[..byte_len];
-        let nlri = Nlri{path_id: path, prefix: Prefix{inner: slice}};
+        let nlri = Nlri{path_id: path, prefix: Ipv4Prefix{inner: slice}};
         self.inner = &self.inner[byte_len..];
         Some(Ok(nlri))
     }

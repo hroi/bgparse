@@ -167,10 +167,10 @@ mod tests {
         let mut nlri = update.nlris();
         assert_eq!(nlri.next().unwrap().unwrap(),
                    Nlri{path_id: Some(1),
-                        prefix: Prefix{inner: &[0x20, 0x05, 0x05, 0x05, 0x05]}});
+                        prefix: Ipv4Prefix{inner: &[0x20, 0x05, 0x05, 0x05, 0x05]}});
         assert_eq!(nlri.next().unwrap().unwrap(),
                    Nlri{path_id: Some(1),
-                        prefix: Prefix{inner: &[0x20, 0xc0, 0xa8, 0x01, 0x05]}});
+                        prefix: Ipv4Prefix{inner: &[0x20, 0xc0, 0xa8, 0x01, 0x05]}});
         assert!(nlri.next().is_none());
     }
 }
