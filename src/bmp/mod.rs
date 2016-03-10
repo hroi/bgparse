@@ -1,6 +1,6 @@
 //! BGP Monitoring Protocol
 
-use message;
+use bgp;
 use types::*;
 
 #[derive(Debug)]
@@ -76,9 +76,9 @@ pub struct MessageIter<'a> {
 }
 
 impl<'a> Iterator for MessageIter<'a> {
-    type Item = Result<message::Message<'a>>;
+    type Item = Result<bgp::Message<'a>>;
 
-    fn next(&mut self) -> Option<Result<message::Message<'a>>> {
+    fn next(&mut self) -> Option<Result<bgp::Message<'a>>> {
         if self.inner.is_empty() || self.error {
             return None;
         }
@@ -97,7 +97,7 @@ impl<'a> Iterator for MessageIter<'a> {
         let slice = &self.inner[..message_len];
         self.inner = &self.inner[message_len..];
 
-        Some(message::Message::from_bytes(slice,
+        Some(bgp::Message::from_bytes(slice,
                                           self.four_byte_asn,
                                           self.add_path))
     }
@@ -259,7 +259,7 @@ impl<'a> Bmp<'a> {
 mod test {
 
     use super::*;
-    use message::*;
+    use bgp;
 
     #[test]
     fn parse_peer_up() {
@@ -316,13 +316,13 @@ mod test {
 
                 let mut messages = peerup.messages(false, false);
                 match messages.next().unwrap() {
-                    Ok(Message::Open(open)) => {
+                    Ok(bgp::Message::Open(open)) => {
                         assert_eq!(open.aut_num(), 100);
                     }
                     x => panic!("Expected Message::Open, got {:?}", x)
                 }
                 match messages.next().unwrap() {
-                    Ok(Message::Open(open)) => {
+                    Ok(bgp::Message::Open(open)) => {
                         assert_eq!(open.aut_num(),32934);
                     }
                     x => panic!("Expected Message::Open, got {:?}", x)
