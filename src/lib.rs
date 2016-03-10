@@ -5,6 +5,7 @@
 #![no_std]
 pub mod types;
 pub mod message;
+pub mod bmp;
 mod afi;
 mod safi;
 

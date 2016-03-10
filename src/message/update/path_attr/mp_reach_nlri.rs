@@ -1,10 +1,9 @@
-
 use super::*;
 use types::*;
 use core::fmt;
 
-//define_path_attr!(MpReachNlri, doc="Multi Protocol Network Layer Reachability Information");
 
+/// Multi Protocol Network Layer Reachability Information
 #[derive(Debug)]
 pub enum MpReachNlri<'a> {
     Ipv4Unicast(Ipv4ReachNlri<'a>),
@@ -48,6 +47,16 @@ macro_rules! impl_reach_ip_nlri {
             inner: &'a [u8],
         }
 
+        #[derive(Clone)]
+        pub struct $nlri_iter<'a> {
+            inner: &'a [u8],
+            error: bool,
+        }
+
+        pub struct $nexthop<'a> {
+            inner: &'a [u8],
+        }
+
         impl<'a> $nlri<'a> {
             pub fn prefix(&self) -> $prefix<'a> {
                 $prefix{inner: self.inner}
@@ -58,16 +67,6 @@ macro_rules! impl_reach_ip_nlri {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
                 self.prefix().fmt(fmt)
             }
-        }
-
-        #[derive(Clone)]
-        pub struct $nlri_iter<'a> {
-            inner: &'a [u8],
-            error: bool,
-        }
-
-        pub struct $nexthop<'a> {
-            inner: &'a [u8],
         }
 
         impl<'a> $reach_nlri<'a> {
