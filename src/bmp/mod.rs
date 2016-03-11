@@ -98,8 +98,8 @@ impl<'a> Iterator for MessageIter<'a> {
         self.inner = &self.inner[message_len..];
 
         Some(bgp::Message::from_bytes(slice,
-                                          self.four_byte_asn,
-                                          self.add_path))
+                                      self.four_byte_asn,
+                                      self.add_path))
     }
 }
 pub trait PeerInfo {
@@ -144,13 +144,13 @@ macro_rules! def_bmptype {
     };
 }
 
-def_bmptype!(RouteMonitoring, PeerInfo, (Messages 48));
+def_bmptype!(RouteMonitoring, PeerInfo, (Messages 48+20));
 def_bmptype!(StatisticsReport, PeerInfo);
 def_bmptype!(PeerDownNotification);
 def_bmptype!(PeerUpNotification, PeerInfo, (Messages 48+20));
 def_bmptype!(Initiation);
 def_bmptype!(Termination);
-def_bmptype!(RouteMirroring, PeerInfo, (Messages 123));
+def_bmptype!(RouteMirroring, PeerInfo, (Messages 48+20));
 
 #[derive(Debug)]
 pub enum Bmp<'a> {
