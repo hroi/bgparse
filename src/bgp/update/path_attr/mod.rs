@@ -74,6 +74,7 @@ impl<'a> PathAttr<'a> {
             ( 5, _) => Err(BgpError::Invalid),
             ( 6, 0) => Ok(PathAttr::AtomicAggregate(AtomicAggregate{inner: bytes})),
             ( 6, _) => Err(BgpError::Invalid),
+            ( 7, 8) if four_byte_asn => Ok(PathAttr::Aggregator(Aggregator{inner: bytes})),
             ( 7, 6) => Ok(PathAttr::Aggregator(Aggregator{inner: bytes})),
             ( 7, _) => Err(BgpError::Invalid),
             ( 8, _) => Ok(PathAttr::Communities(Communities{inner: bytes})),
