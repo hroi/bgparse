@@ -49,13 +49,13 @@ impl<'a> Update<'a> {
     }
 
     pub fn withdrawn_routes(&self) -> WithdrawnRoutes {
-        let slice = &self.value()[2..][..self.withdrawn_routes_len()];
+        let slice = &self.value()[2..self.withdrawn_routes_len()+2];
         WithdrawnRoutes::new(slice)
     }
 
     pub fn path_attrs(&self) -> PathAttrIter {
         let offset = 4 + self.withdrawn_routes_len();
-        let slice = &self.value()[offset..][..self.total_path_attr_len()];
+        let slice = &self.value()[offset..self.total_path_attr_len() + offset];
         PathAttrIter::new(slice, self.four_byte_asn)
     }
 

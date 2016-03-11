@@ -301,14 +301,14 @@ impl<'a> Iterator for AsPathIter<'a> {
         let ret = match segment_type {
             1 => {
                 let len = self.inner[1] as usize;
-                let slice = &self.inner[2..][..(len*as_size)];
-                self.inner = &self.inner[2..][(len*as_size)..];
+                let slice = &self.inner[2..(len*as_size) + 2];
+                self.inner = &self.inner[(len*as_size) + 2..];
                 Ok(AsPathSegment::AsSet(AsSet{inner: slice, four_byte: self.four_byte}))
             }
             2 => {
                 let len = self.inner[1] as usize;
-                let slice = &self.inner[2..][..(len*as_size)];
-                self.inner = &self.inner[2..][(len*as_size)..];
+                let slice = &self.inner[2..(len*as_size) + 2];
+                self.inner = &self.inner[(len*as_size) + 2..];
                 Ok(AsPathSegment::AsSequence(AsSequence{inner: slice, four_byte: self.four_byte}))
             }
             _ => {

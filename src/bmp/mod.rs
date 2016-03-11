@@ -144,13 +144,13 @@ macro_rules! def_bmptype {
     };
 }
 
-def_bmptype!(RouteMonitoring, PeerInfo, (Messages 48+20));
+def_bmptype!(RouteMonitoring, PeerInfo, (Messages 48));
 def_bmptype!(StatisticsReport, PeerInfo);
 def_bmptype!(PeerDownNotification);
 def_bmptype!(PeerUpNotification, PeerInfo, (Messages 48+20));
 def_bmptype!(Initiation);
 def_bmptype!(Termination);
-def_bmptype!(RouteMirroring, PeerInfo, (Messages 48+20));
+def_bmptype!(RouteMirroring, PeerInfo);
 
 #[derive(Debug)]
 pub enum Bmp<'a> {
@@ -334,4 +334,31 @@ mod test {
         }
     }
 
+    #[test]
+    fn parse_routemon() {
+        let bytes = &[3, 0, 0, 0, 140, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 149, 6, 136, 49,
+                      0, 0, 0, 174, 38, 28, 1, 111,
+                      86, 227, 78, 164, 0, 2, 101, 215,
+                      255, 255, 255, 255, 255, 255, 255, 255,
+                      255, 255, 255, 255, 255, 255, 255, 255,
+                      0, 92, 2, 0, 0, 0, 65, 64,
+                      1, 1, 0, 64, 2, 22, 2, 5,
+                      0, 0, 0, 174, 0, 0, 152, 18,
+                      0, 3, 18, 156, 0, 3, 18, 156,
+                      0, 3, 18, 156, 64, 3, 4, 149,
+                      6, 136, 49, 128, 4, 4, 0, 0,
+                      58, 182, 192, 7, 8, 0, 3, 18,
+                      156, 192, 168, 250, 2, 192, 8, 8,
+                      0, 174, 82, 109, 0, 174, 85, 250,
+                      21, 94, 124, 56];
+
+        if let Ok(Bmp::RouteMonitoring(rm)) = Bmp::from_bytes(bytes) {
+            let mut messages = rm.messages(false, false);
+            messages.next().unwrap().unwrap();
+            assert!(messages.next().is_none());
+        }
+    }
 }

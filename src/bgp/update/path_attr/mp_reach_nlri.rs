@@ -77,7 +77,7 @@ macro_rules! impl_reach_ip_nlri {
 
             pub fn nexthop(&self) -> $nexthop<'a> {
                 $nexthop {
-                    inner: &self.inner[4..][..self.nexthop_len()],
+                    inner: &self.inner[4..self.nexthop_len() + 4],
                 }
             }
 
@@ -92,7 +92,6 @@ macro_rules! impl_reach_ip_nlri {
                 fmt.debug_struct(stringify!($reach_nlri))
                     .field("nexthop", &self.nexthop())
                     .field("nlris", &self.nlris())
-                // .field("inner", &self.inner)
                     .finish()
             }
         }
