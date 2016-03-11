@@ -232,7 +232,8 @@ impl<'a> Bmp<'a> {
             return Err(BgpError::Invalid)
         }
 
-        let message_length = (bytes[1] as usize) << 24
+        let message_length
+            = (bytes[1] as usize) << 24
             | (bytes[2] as usize) << 16
             | (bytes[3] as usize) << 8
             | bytes[4] as usize;
