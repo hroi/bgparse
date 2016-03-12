@@ -53,9 +53,9 @@ impl<'a> fmt::Debug for Ipv6Prefix<'a> {
                 try!(fmt.write_str(":"));
             }
             print_colon = true;
-            try!(fmt.write_fmt(format_args!("{:4x}", segment)));
+            try!(fmt.write_fmt(format_args!("{:04x}", segment)));
         }
-        try!(fmt.write_str("/"));
+        try!(fmt.write_str("::/"));
         masklen.fmt(fmt)
     }
 }

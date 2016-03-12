@@ -74,8 +74,8 @@ impl<'a> PathAttr<'a> {
             ( 5, _) => Err(BgpError::Invalid),
             ( 6, 0) => Ok(PathAttr::AtomicAggregate(AtomicAggregate{inner: bytes})),
             ( 6, _) => Err(BgpError::Invalid),
-            ( 7, 8) if four_byte_asn => Ok(PathAttr::Aggregator(Aggregator{inner: bytes})),
-            ( 7, 6) => Ok(PathAttr::Aggregator(Aggregator{inner: bytes})),
+            ( 7, 8) if four_byte_asn => Ok(PathAttr::As4Aggregator(As4Aggregator{inner: bytes})),
+            ( 7, 6) if !four_byte_asn => Ok(PathAttr::Aggregator(Aggregator{inner: bytes})),
             ( 7, _) => Err(BgpError::Invalid),
             ( 8, _) => Ok(PathAttr::Communities(Communities{inner: bytes})),
             ( 9, 4) => Ok(PathAttr::OriginatorId(OriginatorId{inner: bytes})),
@@ -484,32 +484,18 @@ impl<'a> Aggregator<'a> {
 
     /// The last AS number that formed the aggregate route
     pub fn aut_num(&self) -> u32 {
-        if self.inner.len() == 8 {
-            (self.value()[0] as u32) << 24
-                | (self.value()[1] as u32) << 16
-                | (self.value()[2] as u32) << 8
-                |  self.value()[3] as u32
-        } else {
-            (self.value()[0] as u32) << 8
-                | self.value()[1] as u32
-        }
+        (self.value()[0] as u32) << 8
+            | self.value()[1] as u32
     }
 
     /// The IP address of the BGP speaker that formed the aggregate route
     /// (encoded as 4 octets).  This SHOULD be the same address as
     /// the one used for the BGP Identifier of the speaker.
     pub fn ident(&self) -> u32 {
-        if self.inner.len() == 8 {
-            (self.value()[4] as u32) << 24
-                | (self.value()[5] as u32) << 16
-                | (self.value()[6] as u32) << 8
-                |  self.value()[7] as u32
-        } else {
-            (self.value()[2] as u32) << 24
-                | (self.value()[3] as u32) << 16
-                | (self.value()[4] as u32) << 8
-                |  self.value()[5] as u32
-        }
+        (self.value()[2] as u32) << 24
+            | (self.value()[3] as u32) << 16
+            | (self.value()[4] as u32) << 8
+            |  self.value()[5] as u32
     }
 }
 
@@ -681,8 +667,8 @@ impl<'a> As4Aggregator<'a> {
 impl<'a> fmt::Debug for As4Aggregator<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.write_fmt(format_args!("AS{}, {}.{}.{}.{}", self.aut_num(),
-                                   self.value()[2], self.value()[3],
-                                   self.value()[4], self.value()[5],))
+                                   self.value()[4], self.value()[5],
+                                   self.value()[6], self.value()[7],))
     }
 }
 
