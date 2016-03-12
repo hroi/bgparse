@@ -5,7 +5,7 @@ pub use afi::*;
 pub use safi::*;
 
 pub const VALID_BGP_MARKER: [u8; 16] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+                                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
 
 #[derive(PartialEq)]
 pub struct Ipv4Prefix<'a> {
@@ -41,7 +41,7 @@ impl<'a> fmt::Debug for Ipv6Prefix<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let masklen = self.inner[0];
         if masklen == 0 {
-            return fmt.write_str("0/0");
+            return fmt.write_str("::/0");
         }
 
         let mut print_colon = false;
@@ -55,7 +55,11 @@ impl<'a> fmt::Debug for Ipv6Prefix<'a> {
             print_colon = true;
             try!(fmt.write_fmt(format_args!("{:04x}", segment)));
         }
-        try!(fmt.write_str("::/"));
+        if masklen < 112 {
+            try!(fmt.write_str("::"));
+        }
+        try!(fmt.write_str("/"));
+
         masklen.fmt(fmt)
     }
 }
