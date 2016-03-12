@@ -484,18 +484,32 @@ impl<'a> Aggregator<'a> {
 
     /// The last AS number that formed the aggregate route
     pub fn aut_num(&self) -> u32 {
-        (self.value()[0] as u32) << 8
-            | self.value()[1] as u32
+        if self.inner.len() == 8 {
+            (self.value()[0] as u32) << 24
+                | (self.value()[1] as u32) << 16
+                | (self.value()[2] as u32) << 8
+                |  self.value()[3] as u32
+        } else {
+            (self.value()[0] as u32) << 8
+                | self.value()[1] as u32
+        }
     }
 
     /// The IP address of the BGP speaker that formed the aggregate route
     /// (encoded as 4 octets).  This SHOULD be the same address as
     /// the one used for the BGP Identifier of the speaker.
     pub fn ident(&self) -> u32 {
-        (self.value()[2] as u32) << 24
-            | (self.value()[3] as u32) << 16
-            | (self.value()[4] as u32) << 8
-            |  self.value()[5] as u32
+        if self.inner.len() == 8 {
+            (self.value()[4] as u32) << 24
+                | (self.value()[5] as u32) << 16
+                | (self.value()[6] as u32) << 8
+                |  self.value()[7] as u32
+        } else {
+            (self.value()[2] as u32) << 24
+                | (self.value()[3] as u32) << 16
+                | (self.value()[4] as u32) << 8
+                |  self.value()[5] as u32
+        }
     }
 }
 
