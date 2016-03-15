@@ -672,7 +672,11 @@ macro_rules! define_ext_comm {
 
         impl<'a> fmt::Debug for $comm_name<'a> {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                fmt.write_str(stringify!($comm_name))
+                fmt.debug_struct(stringify!($comm_name))
+                    .field("type", &self.type_high())
+                    .field("subtype", &self.type_low())
+                    .field("value", &self.value())
+                    .finish()
             }
         }
     }
@@ -725,24 +729,24 @@ impl<'a> Iterator for ExtendedCommunityIter<'a> {
 
         let extcomm_type = slice[0];
         let extcomm_subtype = slice[1];
-        let ret = match (extcomm_type, extcomm_subtype) {
-            (0, 2) => ExtendedCommunity::RouteTarget(ExtCommRouteTarget{inner: &self.inner}),
-            (0, 3) => ExtendedCommunity::RouteOrigin(ExtCommRouteOrigin{inner: &self.inner}),
-            (0, _) => ExtendedCommunity::TwoOctetAsSpecific(ExtCommTwoOctetAsSpecific{inner: &self.inner}),
-            (1, _) => ExtendedCommunity::Ipv4AddrSpecific(ExtCommIpv4AddrSpecific{inner: &self.inner}),
-            (2, 2) => ExtendedCommunity::RouteTarget(ExtCommRouteTarget{inner: &self.inner}),
-            (2, 3) => ExtendedCommunity::RouteOrigin(ExtCommRouteOrigin{inner: &self.inner}),
-            (2, _) => ExtendedCommunity::FourOctetAsSpecific(ExtCommFourOctetAsSpecific{inner: &self.inner}),
-            (3, _) => ExtendedCommunity::Opaque(ExtCommOpaque{inner: &self.inner}),
-            (4, _) => ExtendedCommunity::QosMarking(ExtCommQosMarking{inner: &self.inner}),
-            (5, _) => ExtendedCommunity::CosCapability(ExtCommCosCapability{inner: &self.inner}),
-            (6, _) => ExtendedCommunity::Evpn(ExtCommEvpn{inner: &self.inner}),
-            (8, _) => ExtendedCommunity::FlowSpec(ExtCommFlowSpec{inner: &self.inner}),
-            (0x80...0x8f, _) => ExtendedCommunity::Experimental(ExtCommExperimental{inner: &self.inner}),
-            (_, _) => ExtendedCommunity::Other(ExtCommOther{inner: &self.inner}),
+        let extcomm = match (extcomm_type, extcomm_subtype) {
+            (0, 2) => ExtendedCommunity::RouteTarget(ExtCommRouteTarget{inner: slice}),
+            (0, 3) => ExtendedCommunity::RouteOrigin(ExtCommRouteOrigin{inner: slice}),
+            (0, _) => ExtendedCommunity::TwoOctetAsSpecific(ExtCommTwoOctetAsSpecific{inner: slice}),
+            (1, _) => ExtendedCommunity::Ipv4AddrSpecific(ExtCommIpv4AddrSpecific{inner: slice}),
+            (2, 2) => ExtendedCommunity::RouteTarget(ExtCommRouteTarget{inner: slice}),
+            (2, 3) => ExtendedCommunity::RouteOrigin(ExtCommRouteOrigin{inner: slice}),
+            (2, _) => ExtendedCommunity::FourOctetAsSpecific(ExtCommFourOctetAsSpecific{inner: slice}),
+            (3, _) => ExtendedCommunity::Opaque(ExtCommOpaque{inner: slice}),
+            (4, _) => ExtendedCommunity::QosMarking(ExtCommQosMarking{inner: slice}),
+            (5, _) => ExtendedCommunity::CosCapability(ExtCommCosCapability{inner: slice}),
+            (6, _) => ExtendedCommunity::Evpn(ExtCommEvpn{inner: slice}),
+            (8, _) => ExtendedCommunity::FlowSpec(ExtCommFlowSpec{inner: slice}),
+            (0x80...0x8f, _) => ExtendedCommunity::Experimental(ExtCommExperimental{inner: slice}),
+            (_, _) => ExtendedCommunity::Other(ExtCommOther{inner: slice}),
             
         };
-        Some(ret)
+        Some(extcomm)
     }
 }
 
