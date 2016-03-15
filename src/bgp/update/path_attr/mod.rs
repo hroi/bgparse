@@ -625,9 +625,9 @@ define_path_attr!(ExtendedCommunities, doc="Extended Communities Attribute");
 
 impl<'a> ExtendedCommunities<'a> {
     pub fn communities(&self) -> Result<ExtendedCommunityIter<'a>> {
-        if self.inner.len() % 8 == 0 {
+        if self.value().len() % 8 == 0 {
             Ok(ExtendedCommunityIter {
-                inner: &self.inner,
+                inner: self.value(),
             })
         } else {
             Err(BgpError::BadLength)
