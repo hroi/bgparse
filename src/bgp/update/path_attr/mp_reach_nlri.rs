@@ -36,10 +36,46 @@ impl<'a> MpReachNlri<'a> {
     }
 }
 
+#[derive(Debug)]
+pub enum MpUnreachNlri<'a> {
+    Ipv4Unicast(Ipv4UnreachNlri<'a>),
+    Ipv4Multicast(Ipv4UnreachNlri<'a>),
+    Ipv6Unicast(Ipv6UnreachNlri<'a>),
+    Ipv6Multicast(Ipv6UnreachNlri<'a>),
+    Other(OtherUnreachNlri<'a>),
+}
+
+impl<'a> MpUnreachNlri<'a> {
+
+    pub fn from_bytes(bytes: &'a [u8]) -> Result<MpUnreachNlri<'a>> {
+        if bytes.len() < 4 {
+            return Err(BgpError::BadLength);
+        }
+
+        let flags = bytes[0];
+        let value = if flags & FLAG_EXT_LEN > 0 { &bytes[4..] } else { &bytes[3..]};
+
+        let afi = Afi::from((value[0] as u16) << 8 | value[1] as u16);
+        let safi = Safi::from(value[2]);
+        let reach = match (afi, safi) {
+            (AFI_IPV4, SAFI_UNICAST) => MpUnreachNlri::Ipv4Unicast(Ipv4UnreachNlri{inner: value}),
+            (AFI_IPV4, SAFI_MULTICAST) => MpUnreachNlri::Ipv4Multicast(Ipv4UnreachNlri{inner: value}),
+            (AFI_IPV6, SAFI_UNICAST) => MpUnreachNlri::Ipv6Unicast(Ipv6UnreachNlri{inner: value}),
+            (AFI_IPV6, SAFI_MULTICAST) => MpUnreachNlri::Ipv6Multicast(Ipv6UnreachNlri{inner: value}),
+            _ => MpUnreachNlri::Other(OtherUnreachNlri{inner: value}),
+        };
+        Ok(reach)
+    }
+}
+
 macro_rules! impl_reach_ip_nlri {
-    ($reach_nlri:ident, $nlri:ident, $nlri_iter:ident, $nexthop: ident, $prefix:ident) => {
+    ($reach_nlri:ident, $unreach_nlri:ident, $nlri:ident, $nlri_iter:ident, $nexthop: ident, $prefix:ident) => {
 
         pub struct $reach_nlri<'a> {
+            inner: &'a [u8],
+        }
+
+        pub struct $unreach_nlri<'a> {
             inner: &'a [u8],
         }
 
@@ -87,10 +123,25 @@ macro_rules! impl_reach_ip_nlri {
             }
         }
 
+        impl<'a> $unreach_nlri<'a> {
+            pub fn nlris(&self) -> $nlri_iter<'a> {
+                let offset = 2 + 1;
+                $nlri_iter{inner: &self.inner[offset..], error: false}
+            }
+        }
+
         impl<'a> fmt::Debug for $reach_nlri<'a> {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
                 fmt.debug_struct(stringify!($reach_nlri))
                     .field("nexthop", &self.nexthop())
+                    .field("nlris", &self.nlris())
+                    .finish()
+            }
+        }
+
+        impl<'a> fmt::Debug for $unreach_nlri<'a> {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                fmt.debug_struct(stringify!($unreach_nlri))
                     .field("nlris", &self.nlris())
                     .finish()
             }
@@ -127,7 +178,16 @@ macro_rules! impl_reach_ip_nlri {
     }
 }
 
-impl_reach_ip_nlri!(Ipv4ReachNlri, Ipv4Nlri, Ipv4NlriIter, Ipv4Nexthop, Ipv4Prefix);
+impl_reach_ip_nlri!(Ipv4ReachNlri, Ipv4UnreachNlri, Ipv4Nlri, Ipv4NlriIter, Ipv4Nexthop, Ipv4Prefix);
+
+impl<'a> Ipv4Nexthop<'a> {
+    pub fn to_u32(&self) -> u32 {
+        (self.inner[0] as u32) << 24
+            | (self.inner[1] as u32) << 16
+            | (self.inner[2] as u32) << 8
+            | (self.inner[3] as u32)
+    }
+}
 
 impl<'a> fmt::Debug for Ipv4Nexthop<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -136,7 +196,27 @@ impl<'a> fmt::Debug for Ipv4Nexthop<'a> {
     }
 }
 
-impl_reach_ip_nlri!(Ipv6ReachNlri, Ipv6Nlri, Ipv6NlriIter, Ipv6Nexthop, Ipv6Prefix);
+impl_reach_ip_nlri!(Ipv6ReachNlri, Ipv6UnreachNlri, Ipv6Nlri, Ipv6NlriIter, Ipv6Nexthop, Ipv6Prefix);
+
+impl<'a> Ipv6Nexthop<'a> {
+    pub fn global(&self) -> [u16; 8] {
+        let mut segments = [0u16; 8];
+        let global = &self.inner[..16];
+        for (i, mut segment) in segments.iter_mut().enumerate() {
+            *segment = (global[i * 2] as u16) << 8 | global[i * 2 + 1] as u16;
+        }
+        segments
+    }
+
+    pub fn link_local(&self) -> [u16; 8] {
+        let mut segments = [0u16; 8];
+        let link_local = &self.inner[16..];
+        for (i, mut segment) in segments.iter_mut().enumerate() {
+            *segment = (link_local[i * 2] as u16) << 8 | link_local[i * 2 + 1] as u16;
+        }
+        segments
+    }
+}
 
 impl<'a> fmt::Debug for Ipv6Nexthop<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -158,6 +238,11 @@ impl<'a> fmt::Debug for Ipv6Nexthop<'a> {
 
 #[derive(Debug)]
 pub struct OtherReachNlri<'a> {
+    inner: &'a [u8]
+}
+
+#[derive(Debug)]
+pub struct OtherUnreachNlri<'a> {
     inner: &'a [u8]
 }
 

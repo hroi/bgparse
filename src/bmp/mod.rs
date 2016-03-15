@@ -256,6 +256,167 @@ impl<'a> Bmp<'a> {
 
 }
 
+#[derive(Debug)]
+pub struct UnknownStatistic<'a> {
+    pub inner: &'a [u8],
+}
+
+#[derive(Debug)]
+pub enum Statistic<'a> {
+    /// Stat Type = 0: (32-bit Counter) Number of prefixes rejected by
+    /// inbound policy.
+    RejectedPrefixCount(u32),
+    /// Stat Type = 1: (32-bit Counter) Number of (known) duplicate prefix
+    /// advertisements.
+    DuplicatePrefixAdvertisementCount(u32),
+    /// Stat Type = 2: (32-bit Counter) Number of (known) duplicate
+    /// withdraws.
+    DuplicatePrefixWithdrawCount(u32),
+    /// Stat Type = 3: (32-bit Counter) Number of updates invalidated due
+    /// to CLUSTER_LIST loop.
+    ClusterListLoopInvalidationCount(u32),
+    /// Stat Type = 4: (32-bit Counter) Number of updates invalidated due
+    /// to AS_PATH loop.
+    AsPathLoopInvalidationCount(u32),
+    /// Stat Type = 5: (32-bit Counter) Number of updates invalidated due
+    /// to ORIGINATOR_ID.
+    OriginatorIdInvalidationCount(u32),
+    /// Stat Type = 6: (32-bit Counter) Number of updates invalidated due
+    /// to AS_CONFED loop.
+    AsConfedInvalidationCount(u32),
+    /// Stat Type = 7: (64-bit Gauge) Number of routes in Adj-RIBs-In.
+    AdjRibsInSize(u64),
+    /// Stat Type = 8: (64-bit Gauge) Number of routes in Loc-RIB.
+    LocRibSize(u64),
+    /// Stat Type = 9: Number of routes in per-AFI/SAFI Adj-RIB-In.  The
+    /// value is structured as: AFI (2 bytes), SAFI (1 byte), followed by
+    /// a 64-bit Gauge.
+    PerAfiSafiAdjRibInSize(Afi, Safi, u64),
+    /// Stat Type = 10: Number of routes in per-AFI/SAFI Loc-RIB.  The
+    /// value is structured as: AFI (2 bytes), SAFI (1 byte), followed by
+    /// a 64-bit Gauge.
+    PerAfiSafiLocRibSize(Afi, Safi, u64),
+    /// Stat Type = 11: (32-bit Counter) Number of updates subjected to
+    /// treat-as-withdraw treatment [RFC7606].
+    UpdatesTreatedAsWithdraws(u32),
+    /// Stat Type = 12: (32-bit Counter) Number of prefixes subjected to
+    /// treat-as-withdraw treatment [RFC7606].
+    PrefixesTreatedAsWithdraws(u32),
+    /// Stat Type = 13: (32-bit Counter) Number of duplicate update
+    /// messages received.
+    DuplicateUpdateCount(u32),
+    Unknown(UnknownStatistic<'a>),
+}
+
+#[derive(Clone)]
+pub struct StatisticsIter<'a> {
+    inner: &'a [u8],
+    error: bool,
+}
+
+impl<'a> Iterator for StatisticsIter<'a> {
+    type Item = Result<Statistic<'a>>;
+    fn next(&mut self) -> Option<Result<Statistic<'a>>> {
+        if self.inner.is_empty() || self.error {
+            return None;
+        }
+
+        if self.inner.len() < 2 {
+            self.error = true;
+            return Some(Err(BgpError::BadLength))
+        }
+
+        let stat_type
+            = (self.inner[0] as usize) << 8
+            | (self.inner[1] as usize);
+
+        let stat_len
+            = (self.inner[2] as usize) << 8
+            | (self.inner[3] as usize);
+
+        if self.inner.len() < stat_len + 4 {
+            self.error = true;
+            return Some(Err(BgpError::BadLength));
+        }
+
+        let slice = &self.inner[4..stat_len + 4];
+
+        self.inner = &self.inner[stat_len + 4..];
+        let stat = match (stat_type, stat_len) {
+            (0, 4) => Statistic::RejectedPrefixCount((slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                                                     | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (1, 4) => Statistic::DuplicatePrefixAdvertisementCount((slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                                                     | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (2, 4) => Statistic::DuplicatePrefixWithdrawCount((slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                                                     | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (3, 4) => Statistic::ClusterListLoopInvalidationCount((slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                                                     | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (4, 4) => Statistic::AsPathLoopInvalidationCount((slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                                                     | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (5, 4) => Statistic::OriginatorIdInvalidationCount((slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                                                     | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (6, 4) => Statistic::AsConfedInvalidationCount((slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                                                     | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (7, 8) => Statistic::AdjRibsInSize(
+                (slice[0] as u64) << 56 | (slice[1] as u64) << 48
+                    | (slice[2] as u64) << 40 | (slice[3] as u64) << 32
+                    | (slice[4] as u64) << 24 | (slice[5] as u64) << 16
+                    | (slice[6] as u64) << 8 | (slice[7] as u64)),
+            (8, 8) => Statistic::LocRibSize(
+                (slice[0] as u64) << 56 | (slice[1] as u64) << 48
+                    | (slice[2] as u64) << 40 | (slice[3] as u64) << 32
+                    | (slice[4] as u64) << 24 | (slice[5] as u64) << 16
+                    | (slice[6] as u64) << 8 | (slice[7] as u64)),
+            (9, 11) => Statistic::PerAfiSafiAdjRibInSize(
+                Afi::from((slice[0] as u16) << 8 | slice[1] as u16),
+                Safi::from(slice[2]),
+                (slice[3] as u64) << 56 | (slice[4] as u64) << 48
+                    | (slice[5] as u64) << 40 | (slice[6] as u64) << 32
+                    | (slice[7] as u64) << 24 | (slice[8] as u64) << 16
+                    | (slice[9] as u64) << 8 | (slice[10] as u64)),
+            (10, 11) => Statistic::PerAfiSafiLocRibSize(
+                Afi::from((slice[0] as u16) << 8 | slice[1] as u16),
+                Safi::from(slice[2]),
+                (slice[3] as u64) << 56 | (slice[4] as u64) << 48
+                    | (slice[5] as u64) << 40 | (slice[6] as u64) << 32
+                    | (slice[7] as u64) << 24 | (slice[8] as u64) << 16
+                    | (slice[9] as u64) << 8 | (slice[10] as u64)),
+            (11, 4) => Statistic::UpdatesTreatedAsWithdraws(
+                (slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                    | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (12, 4) => Statistic::PrefixesTreatedAsWithdraws(
+                (slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                    | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            (13, 4) => Statistic::DuplicateUpdateCount(
+                (slice[0] as u32) << 24 | (slice[1] as u32) << 16
+                    | (slice[2] as u32) << 8 | (slice[3] as u32)),
+            _ => Statistic::Unknown(UnknownStatistic{inner: slice}),
+        };
+        Some(Ok(stat))
+    }
+}
+
+
+impl<'a> StatisticsReport<'a> {
+    pub fn stats_count(&self) -> u32 {
+        let offset = 48;
+        let slice = &self.inner[offset..];
+        (slice[0] as u32) << 24
+            | (slice[1] as u32) << 16
+            | (slice[2] as u32) << 8
+            | (slice[3] as u32) 
+    }
+
+    pub fn stats(&self) -> StatisticsIter<'a> {
+        let offset = 48 + 4;
+        let slice = &self.inner[offset..];
+        StatisticsIter {
+            inner: slice,
+            error: false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
 

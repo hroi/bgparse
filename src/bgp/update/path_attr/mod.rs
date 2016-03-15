@@ -82,7 +82,7 @@ impl<'a> PathAttr<'a> {
             ( 9, _) => Err(BgpError::Invalid),
             (10, _) => Ok(PathAttr::ClusterList(ClusterList{inner: bytes})),
             (14, _) => Ok(PathAttr::MpReachNlri(try!(MpReachNlri::from_bytes(bytes)))),
-            (15, _) => Ok(PathAttr::MpUnreachNlri(MpUnreachNlri{inner: bytes})),
+            (15, _) => Ok(PathAttr::MpUnreachNlri(try!(MpUnreachNlri::from_bytes(bytes)))),
             (16, _) => Ok(PathAttr::ExtendedCommunities(ExtendedCommunities{inner: bytes})),
             (17, _) => Ok(PathAttr::As4Path(As4Path{inner: bytes})),
             (18, _) => Ok(PathAttr::As4Aggregator(As4Aggregator{inner: bytes})),
@@ -605,7 +605,8 @@ impl<'a> Iterator for ClusterListIter<'a> {
             return Some(Err(BgpError::BadLength));
         }
 
-        let id = (self.inner[0]  as u32) << 24
+        let id
+            = (self.inner[0]  as u32) << 24
             | (self.inner[1]  as u32) << 16
             | (self.inner[2]  as u32) << 8
             | (self.inner[3]  as u32);
@@ -619,9 +620,132 @@ impl<'a> Iterator for ClusterListIter<'a> {
 mod mp_reach_nlri;
 pub use self::mp_reach_nlri::*;
 
-define_path_attr!(MpUnreachNlri, derive(Debug), doc="");
 
-define_path_attr!(ExtendedCommunities, derive(Debug), doc="Extended Communities Attribute");
+define_path_attr!(ExtendedCommunities, doc="Extended Communities Attribute");
+
+impl<'a> ExtendedCommunities<'a> {
+    pub fn communities(&self) -> Result<ExtendedCommunityIter<'a>> {
+        if self.inner.len() % 8 == 0 {
+            Ok(ExtendedCommunityIter {
+                inner: &self.inner,
+            })
+        } else {
+            Err(BgpError::BadLength)
+        }
+    }
+}
+
+impl<'a> fmt::Debug for ExtendedCommunities<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self.clone().communities() {
+            Ok(iter) => fmt.debug_list().entries(iter).finish(),
+            Err(err) => err.fmt(fmt)
+        }
+    }
+}
+
+pub trait ExtendedComm<'a> {
+    fn type_high(&self) -> u8;
+    fn type_low(&self) -> u8;
+    fn value(&self) -> &'a [u8];
+}
+
+macro_rules! define_ext_comm {
+    ($comm_name:ident) => {
+        pub struct $comm_name<'a> {
+            inner: &'a [u8],
+        }
+
+        impl<'a> ExtendedComm<'a> for $comm_name<'a> {
+            fn type_high(&self) -> u8 {
+                self.inner[0]
+            }
+
+            fn type_low(&self) -> u8 {
+                self.inner[1]
+            }
+
+            fn value(&self) -> &'a [u8] {
+                &self.inner[2..]
+            }
+        }
+
+        impl<'a> fmt::Debug for $comm_name<'a> {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                fmt.write_str(stringify!($comm_name))
+            }
+        }
+    }
+}
+
+define_ext_comm!(ExtCommTwoOctetAsSpecific);
+define_ext_comm!(ExtCommIpv4AddrSpecific);
+define_ext_comm!(ExtCommFourOctetAsSpecific);
+define_ext_comm!(ExtCommOpaque);
+define_ext_comm!(ExtCommRouteTarget);
+define_ext_comm!(ExtCommRouteOrigin);
+define_ext_comm!(ExtCommQosMarking);
+define_ext_comm!(ExtCommCosCapability);
+define_ext_comm!(ExtCommEvpn);
+define_ext_comm!(ExtCommFlowSpec);
+define_ext_comm!(ExtCommExperimental);
+define_ext_comm!(ExtCommOther);
+
+#[derive(Debug)]
+pub enum ExtendedCommunity<'a> {
+    TwoOctetAsSpecific(ExtCommTwoOctetAsSpecific<'a>),
+    Ipv4AddrSpecific(ExtCommIpv4AddrSpecific<'a>),
+    FourOctetAsSpecific(ExtCommFourOctetAsSpecific<'a>),
+    Opaque(ExtCommOpaque<'a>),
+    RouteTarget(ExtCommRouteTarget<'a>),
+    RouteOrigin(ExtCommRouteOrigin<'a>),
+    QosMarking(ExtCommQosMarking<'a>),
+    CosCapability(ExtCommCosCapability<'a>),
+    Evpn(ExtCommEvpn<'a>),
+    FlowSpec(ExtCommFlowSpec<'a>),
+    Experimental(ExtCommExperimental<'a>),
+    Other(ExtCommOther<'a>),
+}
+
+
+pub struct ExtendedCommunityIter<'a> {
+    inner: &'a [u8],
+}
+
+impl<'a> Iterator for ExtendedCommunityIter<'a> {
+    type Item = ExtendedCommunity<'a>;
+
+    fn next(&mut self) -> Option<ExtendedCommunity<'a>> {
+        if self.inner.is_empty() {
+            return None;
+        }
+
+        let slice = &self.inner[..8];
+        self.inner = &self.inner[8..];
+
+        let extcomm_type = slice[0];
+        let extcomm_subtype = slice[1];
+        let ret = match (extcomm_type, extcomm_subtype) {
+            (0, 2) => ExtendedCommunity::RouteTarget(ExtCommRouteTarget{inner: &self.inner}),
+            (0, 3) => ExtendedCommunity::RouteOrigin(ExtCommRouteOrigin{inner: &self.inner}),
+            (0, _) => ExtendedCommunity::TwoOctetAsSpecific(ExtCommTwoOctetAsSpecific{inner: &self.inner}),
+            (1, _) => ExtendedCommunity::Ipv4AddrSpecific(ExtCommIpv4AddrSpecific{inner: &self.inner}),
+            (2, 2) => ExtendedCommunity::RouteTarget(ExtCommRouteTarget{inner: &self.inner}),
+            (2, 3) => ExtendedCommunity::RouteOrigin(ExtCommRouteOrigin{inner: &self.inner}),
+            (2, _) => ExtendedCommunity::FourOctetAsSpecific(ExtCommFourOctetAsSpecific{inner: &self.inner}),
+            (3, _) => ExtendedCommunity::Opaque(ExtCommOpaque{inner: &self.inner}),
+            (4, _) => ExtendedCommunity::QosMarking(ExtCommQosMarking{inner: &self.inner}),
+            (5, _) => ExtendedCommunity::CosCapability(ExtCommCosCapability{inner: &self.inner}),
+            (6, _) => ExtendedCommunity::Evpn(ExtCommEvpn{inner: &self.inner}),
+            (8, _) => ExtendedCommunity::FlowSpec(ExtCommFlowSpec{inner: &self.inner}),
+            (0x80...0x8f, _) => ExtendedCommunity::Experimental(ExtCommExperimental{inner: &self.inner}),
+            (_, _) => ExtendedCommunity::Other(ExtCommOther{inner: &self.inner}),
+            
+        };
+        Some(ret)
+    }
+}
+
 define_path_attr!(As4Path, doc="AsPath with four-byte-asns");
 
 impl<'a> As4Path<'a> {
@@ -681,11 +805,6 @@ define_path_attr!(PeDistinguisherLabels, derive(Debug), doc="");
 define_path_attr!(BgpLs, derive(Debug), doc="North-Bound Distribution of Link-State and TE Information");
 define_path_attr!(AttrSet, derive(Debug), doc="");
 define_path_attr!(Other, derive(Debug), doc="");
-
-
-
-
-
 
 #[cfg(test)]
 mod tests {

@@ -53,7 +53,7 @@ impl<'a> fmt::Debug for Ipv6Prefix<'a> {
                 try!(fmt.write_str(":"));
             }
             print_colon = true;
-            try!(fmt.write_fmt(format_args!("{:04x}", segment)));
+            try!(fmt.write_fmt(format_args!("{:x}", segment)));
         }
         if masklen < 112 {
             try!(fmt.write_str("::"));
