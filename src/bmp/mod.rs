@@ -180,7 +180,7 @@ impl<'a> Iterator for RouterInfoIter<'a> {
             return None;
         }
 
-        if self.inner.len() < 2 {
+        if self.inner.len() < 4 {
             self.error = true;
             return Some(Err(BgpError::BadLength));
         }
