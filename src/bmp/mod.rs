@@ -2,6 +2,7 @@
 
 use bgp;
 use types::*;
+use core::str;
 
 #[derive(Debug)]
 pub struct PerPeer<'a> {
@@ -102,6 +103,7 @@ impl<'a> Iterator for MessageIter<'a> {
                                       self.add_path))
     }
 }
+
 pub trait PeerInfo {
     fn peer_info(&self) -> PerPeer;
 }
@@ -114,7 +116,7 @@ macro_rules! def_bmptype {
     ($bmptype:ident) => {
         #[derive(PartialEq,Debug)]
         pub struct $bmptype<'a> {
-            inner: &'a [u8],
+            pub inner: &'a [u8],
         }
     };
     ($bmptype:ident PeerInfo) => {
@@ -149,6 +151,79 @@ def_bmptype!(StatisticsReport, PeerInfo);
 def_bmptype!(PeerDownNotification);
 def_bmptype!(PeerUpNotification, PeerInfo, (Messages 48+20));
 def_bmptype!(Initiation);
+
+impl<'a> Initiation<'a> {
+    pub fn from_bytes(bytes: &'a [u8]) -> Initiation<'a> {
+        Initiation {
+            inner: bytes,
+        }
+    }
+
+    pub fn router_info(&self) -> RouterInfoIter<'a> {
+        RouterInfoIter {
+            inner: &self.inner[6..],
+            error: false,
+        }
+    }
+}
+
+pub struct RouterInfoIter<'a> {
+    inner: &'a [u8],
+    error: bool,
+}
+
+impl<'a> Iterator for RouterInfoIter<'a> {
+    type Item = Result<RouterInfo<'a>>;
+
+    fn next(&mut self) -> Option<Result<RouterInfo<'a>>> {
+        if self.inner.is_empty() || self.error {
+            return None;
+        }
+
+        if self.inner.len() < 2 {
+            self.error = true;
+            return Some(Err(BgpError::BadLength));
+        }
+
+        let msg_type = (self.inner[0] as u16) << 8 | self.inner[1] as u16;
+        let msg_len = (self.inner[2] as usize) << 8 | self.inner[3] as usize;
+
+        if self.inner.len() < msg_len {
+            self.error = true;
+            return Some(Err(BgpError::BadLength));
+        }
+
+        let slice = &self.inner[4..msg_len + 4];
+        self.inner = &self.inner[msg_len + 4..];
+
+        let str_slice = match str::from_utf8(slice) {
+            Ok(string) => string,
+            Err(_) => {
+                self.error = true;
+                return Some(Err(BgpError::Invalid));
+            }
+        };
+
+        let ret = match msg_type {
+            0 => RouterInfo::String(str_slice),
+            1 => RouterInfo::SysDescr(str_slice),
+            2 => RouterInfo::SysName(str_slice),
+            _ => RouterInfo::Other(slice),
+        };
+        Some(Ok(ret))
+    }
+}
+
+#[derive(Debug)]
+pub enum RouterInfo<'a> {
+    String(&'a str),
+    SysDescr(&'a str),
+    SysName(&'a str),
+    Other(&'a [u8]),
+}
+
+
+
 def_bmptype!(Termination);
 def_bmptype!(RouteMirroring, PeerInfo);
 
