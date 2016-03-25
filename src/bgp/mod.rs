@@ -1,18 +1,21 @@
 pub mod open;
 pub mod update;
+pub mod notification;
 
 use types::*;
 use self::open::*;
 use self::update::*;
+use self::notification::*;
 
 #[derive(Debug)]
 pub enum Message<'a> {
     Open(Open<'a>),
     Update(Update<'a>),
-    Notification,
+    Notification(Notification<'a>),
     KeepAlive,
     Refresh,
 }
+
 
 // pub enum ParseResult<'a> {
 //     Done(usize, Message<'a>),
@@ -87,7 +90,7 @@ impl<'a> Message<'a> {
         match message_type {
             1 => Ok(Message::Open(try!(Open::from_bytes(raw)))),
             2 => Ok(Message::Update(try!(Update::from_bytes(raw, four_byte_asn, add_paths)))),
-            3 => Ok(Message::Notification),
+            3 => Ok(Message::Notification(try!(Notification::from_bytes(raw)))),
             4 => Ok(Message::KeepAlive),
             5 => Ok(Message::Refresh),
             _ => Err(BgpError::Invalid),
