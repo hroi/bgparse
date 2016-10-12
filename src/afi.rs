@@ -1,6 +1,6 @@
 use core::fmt;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Afi(u16);
 
 /// IP version 4

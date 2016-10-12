@@ -55,7 +55,7 @@ pub const SAFI_VPNV_AUTODISC: Safi = Safi(134);
 // 255   Reserved                                                                 [RFC4760]
 
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Safi(u8);
 
 impl From<u8> for Safi {
